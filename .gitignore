@@ -1,0 +1,35 @@
+# Secrets & environment
+.env
+
+# Agent data (contains API keys, credentials, sessions, memory)
+openclaw-data/
+
+# Large model files
+models/
+
+# Traefik secrets & TLS certificates
+traefik/.htpasswd
+traefik/acme/
+
+# Working data
+workspace/
+
+# Python
+__pycache__/
+*.pyc
+
+# Databases
+*.db
+
+# Backup files
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log

@@ -1,0 +1,35 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: WARN
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  duckdns:
+    acme:
+      # Used only for Let's Encrypt expiry notifications — update with your real email.
+      email: admin@openclaw-frostbite.duckdns.org
+      storage: /acme/acme.json
+      dnsChallenge:
+        provider: duckdns
+        propagation:
+          delayBeforeChecks: 30s
+
+providers:
+  # Routes defined in dynamic.yml (no Docker socket needed)
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true

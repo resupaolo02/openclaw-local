@@ -1,0 +1,2691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual-viewport">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>Frostbite Command Center</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230d1117'/><text y='.85em' font-size='75' x='12'>❄️</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --kb-height: 0px;
+    --bg:      #0d1117;
+    --card:    #161b22;
+    --border:  #30363d;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --red:     #f85149;
+    --blue:    #58a6ff;
+    --frost:   #a8d8ea;
+    --muted:   #7d8590;
+    --text:    #e6edf3;
+    --text2:   #c9d1d9;
+    --radius:  10px;
+    --shadow:  0 2px 8px rgba(0,0,0,.4);
+    --nav-w:     200px;
+    --nav-w-col: 52px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    padding: 0;
+    position: fixed;
+    width: 100%;
+    top: 0;
+    left: 0;
+  }
+  #main-content {
+    flex: 1;
+    overflow: hidden;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px calc(16px + env(safe-area-inset-left, 0px));
+    min-width: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand-icon { font-size: 22px; }
+  .header-meta { color: var(--muted); font-size: 12px; text-align: right; line-height: 1.6; }
+  #refresh-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--blue);
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background .15s;
+  }
+  #refresh-btn:hover { background: #1f2937; }
+
+  /* ── Overall status banner ── */
+  #overall-banner {
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 15px;
+    border: 1px solid transparent;
+    transition: background .3s;
+  }
+  #overall-banner.healthy { background: rgba(63,185,80,.12); border-color: rgba(63,185,80,.3); }
+  #overall-banner.degraded { background: rgba(210,153,34,.12); border-color: rgba(210,153,34,.3); }
+  #overall-banner.down    { background: rgba(248,81,73,.12);  border-color: rgba(248,81,73,.3); }
+  #overall-banner .dot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  #overall-banner.healthy .dot  { background: var(--green); }
+  #overall-banner.degraded .dot { background: var(--yellow); }
+  #overall-banner.down .dot     { background: var(--red); animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .4; }
+  }
+
+  /* ── Grid ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+  .grid-full { grid-column: 1 / -1; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Container rows ── */
+  .container-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .container-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .container-name { font-weight: 600; font-size: 13px; }
+  .container-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .container-right { text-align: right; }
+
+  /* ── Status pills ── */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+  .pill-green  { background: rgba(63,185,80,.18);  color: var(--green); }
+  .pill-yellow { background: rgba(210,153,34,.18); color: var(--yellow); }
+  .pill-red    { background: rgba(248,81,73,.18);  color: var(--red); }
+  .pill-gray   { background: rgba(125,133,144,.15); color: var(--muted); }
+  .pill-blue   { background: rgba(88,166,255,.15); color: var(--blue); }
+
+  /* ── Stat rows ── */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .stat-label { color: var(--muted); font-size: 12px; }
+  .stat-value { font-size: 13px; font-weight: 500; color: var(--text2); }
+
+  /* ── Progress bars ── */
+  .bar-wrap { margin-top: 10px; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .bar-track {
+    background: #21262d;
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .5s ease;
+  }
+  .bar-green  { background: var(--green); }
+  .bar-yellow { background: var(--yellow); }
+  .bar-red    { background: var(--red); }
+  .bar-blue   { background: var(--blue); }
+
+  /* ── Error list ── */
+  .error-list { list-style: none; }
+  .error-item {
+    padding: 8px 10px;
+    border-left: 3px solid var(--red);
+    background: rgba(248,81,73,.06);
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .error-item:last-child { margin-bottom: 0; }
+  .error-time { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+  .error-msg { color: var(--text2); word-break: break-word; }
+  .no-errors {
+    color: var(--green);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── GPU ── */
+  .gpu-name { font-weight: 600; font-size: 13px; margin-bottom: 10px; color: var(--text); }
+
+  /* ── Container deep-dive ── */
+  .cstat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .cstat-card {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .cstat-name {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cstat-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .cstat-metric {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .cstat-metric-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .cstat-metric-value { font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0 4px; }
+
+  /* ── Net interfaces ── */
+  .iface-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .iface-row:last-child { border-bottom: none; }
+  .iface-name { color: var(--blue); font-family: monospace; }
+  .iface-stat { color: var(--muted); }
+
+  /* ── Loading overlay ── */
+  #loading {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Error toast ── */
+  #toast {
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    background: rgba(248,81,73,.9);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    display: none;
+    z-index: 200;
+    max-width: 280px;
+  }
+
+  /* ── Refresh countdown ── */
+  #countdown { color: var(--muted); font-size: 11px; }
+
+  /* ── Mobile ── */
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    #sessions-drawer { width: 100vw; max-width: 100vw; right: -100vw; }
+    .cstat-grid { grid-template-columns: 1fr; }
+  }
+  /* ── Mobile menu button (hidden on desktop) ── */
+  #mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 8px 2px 0;
+    border-radius: 6px;
+    line-height: 1;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+  #mobile-menu-btn:hover { color: var(--frost); }
+
+  /* ── Premade prompts toggle button ── */
+  #prompts-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  #prompts-toggle-btn:hover { color: var(--text2); }
+  #skill-chips.prompts-collapsed { display: none !important; }
+
+  @media (max-width: 520px) {
+    #main-content { padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 10px calc(10px + env(safe-area-inset-left, 0px)); }
+    /* Sidebar becomes a slide-in overlay on mobile */
+    #sidebar {
+      position: fixed !important;
+      left: 0; top: 0; bottom: 0;
+      z-index: 150;
+      transform: translateX(-100%);
+      width: 200px !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,.6);
+      transition: transform .22s ease !important;
+    }
+    body.nav-open #sidebar { transform: translateX(0); }
+    body.nav-open::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 149;
+    }
+    body.nav-open .nav-label,
+    body.nav-open .brand-text { opacity: 1 !important; pointer-events: auto !important; }
+    #mobile-menu-btn { display: inline-block; }
+    header h1 { font-size: 16px; }
+    .card { padding: 12px; }
+    .skill-chips { gap: 4px; }
+    .skill-chip { padding: 4px 8px; font-size: 11px; }
+    /* Hide clutter on mobile — saves ~50px vertical space */
+    .header-meta { display: none; }
+    .chat-hint { display: none; }
+    /* Hide collapse toggle inside mobile overlay nav */
+    .sidebar-footer { display: none; }
+  }
+
+  /* ── Sidebar Nav ── */
+  #sidebar {
+    width: var(--nav-w);
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    transition: width .22s ease;
+    overflow: hidden;
+    height: 100dvh;
+  }
+  body.nav-collapsed #sidebar { width: var(--nav-w-col); }
+
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 14px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .sidebar-brand .brand-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+  .brand-text {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    letter-spacing: .02em; overflow: hidden;
+    transition: opacity .15s;
+    white-space: nowrap;
+  }
+  body.nav-collapsed .brand-text { opacity: 0; pointer-events: none; }
+
+  .sidebar-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 6px;
+    gap: 2px;
+    overflow: hidden;
+  }
+  .nav-item {
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 10px;
+    text-align: left;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+    width: 100%;
+  }
+  .nav-item:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .nav-item.active { background: rgba(168,216,234,.1); color: var(--frost); }
+  .nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+  .nav-label { transition: opacity .15s; overflow: hidden; }
+  body.nav-collapsed .nav-label { opacity: 0; pointer-events: none; }
+
+  .sidebar-footer {
+    border-top: 1px solid var(--border);
+    padding: 8px 6px;
+    flex-shrink: 0;
+  }
+  .sidebar-toggle {
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    padding: 8px;
+    width: 100%;
+    transition: background .15s, color .15s;
+  }
+  .sidebar-toggle:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .toggle-arrow { display: inline-block; transition: transform .22s; }
+  body.nav-collapsed .toggle-arrow { transform: rotate(180deg); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+
+  /* ── Heartbeat tab ── */
+  .hb-task-card {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .hb-task-card:last-child { margin-bottom: 0; }
+  .hb-task-info { flex: 1; min-width: 0; }
+  .hb-task-name { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 4px; }
+  .hb-task-bullets { list-style: disc; padding-left: 16px; margin: 0; }
+  .hb-task-bullets li { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .hb-last-run { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .hb-last-run span { color: var(--blue); }
+
+  .hb-trigger-btn {
+    background: rgba(88,166,255,.12);
+    border: 1px solid rgba(88,166,255,.3);
+    color: var(--blue);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s;
+    flex-shrink: 0;
+  }
+  .hb-trigger-btn:hover { background: rgba(88,166,255,.22); }
+  .hb-trigger-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  #hb-trigger-all {
+    background: rgba(63,185,80,.12);
+    border: 1px solid rgba(63,185,80,.3);
+    color: var(--green);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #hb-trigger-all:hover { background: rgba(63,185,80,.22); }
+  #hb-trigger-all:disabled { opacity: .4; cursor: not-allowed; }
+
+  .hb-status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Calendar tab ── */
+  .cal-week-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 6px;
+  }
+  .cal-week-header:first-child { margin-top: 0; }
+  .cal-day-name {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--frost);
+    min-width: 96px;
+  }
+  .cal-day-date {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .cal-day-free {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+    padding: 6px 0 6px 16px;
+    margin-bottom: 4px;
+  }
+  .cal-ev-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    margin-left: 16px;
+  }
+  .cal-ev-card.today-ev { border-left-color: var(--green); }
+  .cal-ev-time {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--blue);
+    min-width: 80px;
+    padding-top: 2px;
+  }
+  .cal-ev-card.today-ev .cal-ev-time { color: var(--green); }
+  .cal-ev-info { flex: 1; min-width: 0; }
+  .cal-ev-title { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-ev-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .cal-ev-del {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    align-self: flex-start;
+  }
+  .cal-ev-del:hover { color: var(--red); border-color: var(--red); }
+  .cal-week-range {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 12px;
+    padding: 6px 10px;
+    background: rgba(88,166,255,.08);
+    border-radius: 6px;
+    display: inline-block;
+  }
+  /* filter pills */
+  .cal-filter-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .cal-filter-pill {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+    white-space: nowrap;
+  }
+  .cal-filter-pill:hover { background: rgba(88,166,255,.1); border-color: rgba(88,166,255,.4); color: var(--blue); }
+  .cal-filter-pill.active { background: rgba(88,166,255,.18); border-color: var(--blue); color: var(--blue); }
+
+  #cal-trigger-btn {
+    background: rgba(63,185,80,.12);
+    border: 1px solid rgba(63,185,80,.3);
+    color: var(--green);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #cal-trigger-btn:hover { background: rgba(63,185,80,.22); }
+  #cal-trigger-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .cal-add-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .cal-add-form input, .cal-add-form select, .cal-add-form textarea {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 12px;
+    width: 100%;
+    font-family: inherit;
+  }
+  .cal-add-form textarea { resize: vertical; min-height: 56px; }
+  .cal-add-form .full-col { grid-column: 1 / -1; }
+  .cal-add-form input:focus, .cal-add-form select:focus, .cal-add-form textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+  #cal-add-submit {
+    background: rgba(88,166,255,.15);
+    border: 1px solid rgba(88,166,255,.35);
+    color: var(--blue);
+    border-radius: 6px;
+    padding: 7px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    width: 100%;
+  }
+  #cal-add-submit:hover { background: rgba(88,166,255,.28); }
+  #cal-add-submit:disabled { opacity: .4; cursor: not-allowed; }
+  .cal-empty { text-align: center; color: var(--muted); padding: 28px 0; font-size: 13px; }
+
+  /* ── Chat tab ── */
+  /* #chat-panel rules removed — active element is #panel-chat */
+
+  .skill-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .skill-chip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text2);
+    transition: background .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .skill-chip:hover {
+    background: rgba(88,166,255,.1);
+    border-color: rgba(88,166,255,.4);
+    color: var(--blue);
+  }
+
+  #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+  }
+  .msg {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg-user .msg-avatar  { background: rgba(88,166,255,.2); }
+  .msg-klaw .msg-avatar  { background: rgba(168,216,234,.15); }
+  .msg-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .msg-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .msg-user .msg-name { color: var(--blue); }
+  .msg-klaw .msg-name { color: var(--frost); }
+  .msg-text {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text2);
+    word-break: break-word;
+  }
+  .msg-user .msg-text {
+    border-radius: 10px 0 10px 10px;
+    background: rgba(88,166,255,.06);
+    border-color: rgba(88,166,255,.2);
+  }
+  /* Markdown output inside .msg-text */
+  .msg-text p  { margin: 0 0 8px; }
+  .msg-text p:last-child { margin-bottom: 0; }
+  .msg-text ul, .msg-text ol { padding-left: 20px; margin: 6px 0; }
+  .msg-text li { margin: 2px 0; }
+  .msg-text code {
+    background: rgba(255,255,255,.07);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  .msg-text pre {
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .msg-text pre code { background: none; padding: 0; }
+  .msg-text h1, .msg-text h2, .msg-text h3 {
+    font-size: 14px; margin: 10px 0 4px; color: var(--text);
+  }
+  .msg-text strong { color: var(--text); }
+  .msg-text blockquote {
+    border-left: 3px solid var(--blue);
+    margin: 6px 0;
+    padding: 4px 12px;
+    color: var(--muted);
+  }
+  .msg-text a { color: var(--blue); }
+  .msg-text table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  .msg-text th, .msg-text td {
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .msg-text th { background: rgba(255,255,255,.05); color: var(--text); }
+
+  .msg-file-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(210,153,34,.1);
+    border: 1px solid rgba(210,153,34,.25);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 11px;
+    color: var(--yellow);
+    margin-top: 6px;
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 10px 14px;
+  }
+  .typing-dot {
+    width: 6px; height: 6px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: bounce .8s ease-in-out infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: .15s; }
+  .typing-dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); }
+    40%           { transform: translateY(-5px); }
+  }
+
+  .chat-input-area {
+    border-top: 1px solid var(--border);
+    padding: 12px 0 env(safe-area-inset-bottom, 0px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chat-file-preview {
+    display: none;
+    background: rgba(210,153,34,.06);
+    border: 1px solid rgba(210,153,34,.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--yellow);
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .chat-file-preview.active { display: flex; }
+  .chat-file-remove {
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+
+  .chat-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  #chat-input {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 14px;
+    resize: none;
+    min-height: 42px;
+    max-height: 120px;
+    line-height: 1.5;
+    transition: border-color .15s;
+  }
+  #chat-input:focus { outline: none; border-color: var(--blue); }
+  #chat-input::placeholder { color: var(--muted); }
+  /* Lift chat panel above keyboard when it opens */
+  #panel-chat { padding-bottom: var(--kb-height); }
+  /* Prevent iOS zoom & fix calendar form inputs on mobile */
+  @media (max-width: 768px) {
+    #chat-input { font-size: 16px; }
+    .cal-add-form input, .cal-add-form select, .cal-add-form textarea { font-size: 16px; }
+  }
+
+  .chat-action-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 8px 10px;
+    transition: background .15s, color .15s;
+    flex-shrink: 0;
+    height: 42px;
+    display: flex;
+    align-items: center;
+  }
+  .chat-action-btn:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  #chat-send-btn {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    height: 42px;
+    transition: opacity .15s;
+  }
+  #chat-send-btn:hover { opacity: .85; }
+  #chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .chat-hint {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* ── Context usage bar ── */
+  .ctx-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0 2px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .ctx-bar-track {
+    flex: 1;
+    background: #21262d;
+    border-radius: 4px;
+    height: 5px;
+    overflow: hidden;
+  }
+  .ctx-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .5s ease, background .3s;
+  }
+  .ctx-label { white-space: nowrap; min-width: 135px; text-align: right; }
+
+  #chat-new-btn, #chat-sessions-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  #chat-new-btn:hover, #chat-sessions-btn:hover { color: var(--text); border-color: var(--text); }
+
+  /* ── Sessions drawer ── */
+  #sessions-drawer {
+    position: fixed;
+    top: 0; right: -420px;
+    width: 420px;
+    max-width: 95vw;
+    height: 100dvh;
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 24px rgba(0,0,0,.5);
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    transition: right .25s ease;
+  }
+  #sessions-drawer.open { right: 0; }
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .drawer-header h2 { font-size: 14px; font-weight: 600; color: var(--text); }
+  .drawer-close {
+    background: none; border: none;
+    color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1;
+    padding: 2px 4px; border-radius: 4px;
+  }
+  .drawer-close:hover { color: var(--text); background: rgba(255,255,255,.06); }
+  #sessions-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sess-card {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .sess-card:hover { border-color: rgba(88,166,255,.35); }
+  .sess-preview {
+    font-size: 12px; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 5px;
+  }
+  .sess-meta {
+    font-size: 11px; color: var(--muted); margin-bottom: 8px;
+  }
+  .sess-actions { display: flex; gap: 6px; }
+  .sess-continue-btn {
+    background: rgba(88,166,255,.12);
+    border: 1px solid rgba(88,166,255,.3);
+    color: var(--blue);
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+  }
+  .sess-continue-btn:hover { background: rgba(88,166,255,.22); }
+  .sess-delete-btn {
+    background: rgba(248,81,73,.08);
+    border: 1px solid rgba(248,81,73,.2);
+    color: var(--red);
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; cursor: pointer;
+    transition: background .15s;
+  }
+  .sess-delete-btn:hover { background: rgba(248,81,73,.18); }
+  #sessions-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 399;
+  }
+  #sessions-overlay.open { display: block; }
+
+  .drop-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(88,166,255,.12);
+    border: 3px dashed var(--blue);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--blue);
+    pointer-events: none;
+  }
+  .drop-overlay.active { display: flex; }
+
+  /* ── Skeleton loading ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--card) 25%, #1c2330 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+    height: 14px;
+    margin: 6px 0;
+  }
+  .skeleton-bar { height: 6px; border-radius: 4px; margin: 10px 0 8px; }
+  .skeleton-row { display: flex; justify-content: space-between; gap: 12px; }
+  .skeleton-row .skeleton { flex: 1; }
+  .skeleton-wide { width: 80%; }
+  .skeleton-short { width: 40%; }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Connection status ── */
+  .conn-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .conn-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .conn-ok .conn-dot { background: var(--green); }
+  .conn-ok { color: var(--green); }
+  .conn-err .conn-dot { background: var(--red); }
+  .conn-err { color: var(--red); }
+
+  /* ── Toast variants ── */
+  #toast.toast-success {
+    background: rgba(63,185,80,.9);
+  }
+  #toast.toast-error {
+    background: rgba(248,81,73,.9);
+  }
+  #toast.toast-info {
+    background: rgba(88,166,255,.9);
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  Connecting to Frostbite…
+</div>
+
+<div id="toast" role="alert" aria-live="polite"></div>
+
+<!-- Vertical Sidebar Navigation -->
+<nav id="sidebar" aria-label="Main navigation">
+  <div class="sidebar-brand">
+    <span class="brand-icon" aria-hidden="true">❄️</span>
+    <span class="brand-text">Frostbite</span>
+  </div>
+  <div class="sidebar-nav" role="tablist" aria-orientation="vertical">
+    <button class="nav-item active" onclick="switchTab('chat')" id="tab-chat" role="tab" aria-selected="true" aria-controls="panel-chat">
+      <span class="nav-icon" aria-hidden="true">💬</span>
+      <span class="nav-label">Chat</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('monitor')" id="tab-monitor" role="tab" aria-selected="false" aria-controls="panel-monitor">
+      <span class="nav-icon" aria-hidden="true">📡</span>
+      <span class="nav-label">Monitor</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('heartbeat')" id="tab-heartbeat" role="tab" aria-selected="false" aria-controls="panel-heartbeat">
+      <span class="nav-icon" aria-hidden="true">💓</span>
+      <span class="nav-label">Heartbeat</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('calendar')" id="tab-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar">
+      <span class="nav-icon" aria-hidden="true">📅</span>
+      <span class="nav-label">Calendar</span>
+    </button>
+  </div>
+  <div class="sidebar-footer">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar" aria-label="Toggle sidebar">
+      <span class="toggle-arrow" aria-hidden="true">◄</span>
+    </button>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div id="main-content">
+
+<header>
+  <h1><button id="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Open navigation">☰</button><span class="brand-icon">❄️</span> Frostbite Command Center</h1>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="conn-status conn-ok" id="conn-indicator" title="API connection status">
+      <span class="conn-dot"></span>
+      <span id="conn-text">Connected</span>
+    </span>
+    <button id="refresh-btn" onclick="fetchData()" aria-label="Refresh dashboard data">↻ Refresh</button>
+    <div class="header-meta">
+      <div id="last-updated">—</div>
+      <div id="countdown"></div>
+    </div>
+  </div>
+</header>
+
+
+
+<!-- ══════════════ MONITOR TAB ══════════════ -->
+<div class="tab-panel" id="panel-monitor" role="tabpanel" aria-labelledby="tab-monitor" style="padding-top:4px">
+
+<!-- Overall status banner -->
+<div id="overall-banner" class="degraded">
+  <div class="dot"></div>
+  <span id="overall-text">Loading…</span>
+</div>
+
+<div class="grid">
+
+  <!-- Containers -->
+  <div class="card">
+    <div class="card-title">Containers</div>
+    <div id="containers-body">
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+    </div>
+  </div>
+
+  <!-- LLM Server -->
+  <div class="card">
+    <div class="card-title">LLM Server</div>
+    <div id="llm-body">
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton skeleton-bar"></div>
+    </div>
+  </div>
+
+  <!-- System Resources -->
+  <div class="card">
+    <div class="card-title">Windows Host — CPU &amp; Memory</div>
+    <div id="system-body">
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton skeleton-bar"></div>
+    </div>
+  </div>
+
+  <!-- Host Network -->
+  <div class="card">
+    <div class="card-title">Windows Host — Disk &amp; Network</div>
+    <div id="network-body">
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+    </div>
+  </div>
+
+  <!-- GPU -->
+  <div class="card">
+    <div class="card-title">GPU</div>
+    <div id="gpu-body">
+      <div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton skeleton-bar"></div>
+    </div>
+  </div>
+
+  <!-- Container Deep Dive -->
+  <div class="card grid-full">
+    <div class="card-title">Container Deep Dive</div>
+    <div id="cstats-body"><div class="stat-label">Loading…</div></div>
+  </div>
+
+  <!-- Agent Sessions -->
+  <div class="card grid-full">
+    <div class="card-title">Agent Sessions &amp; Errors</div>
+    <div id="sessions-body">
+      <div class="skeleton-row"><div class="skeleton skeleton-short"></div><div class="skeleton skeleton-short"></div></div>
+      <div class="skeleton skeleton-wide"></div>
+    </div>
+  </div>
+
+</div>
+</div><!-- end #panel-monitor -->
+
+<!-- ══════════════ HEARTBEAT TAB ══════════════ -->
+<div class="tab-panel" id="panel-heartbeat" role="tabpanel" aria-labelledby="tab-heartbeat">
+  <div class="grid">
+
+    <!-- Heartbeat Status Card -->
+    <div class="card">
+      <div class="card-title">Heartbeat Status</div>
+      <div id="hb-status-body">
+        <div class="stat-label">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Last Event Card -->
+    <div class="card">
+      <div class="card-title">Last Event</div>
+      <div id="hb-event-body">
+        <div class="stat-label" style="color:var(--muted)">No heartbeat events yet</div>
+      </div>
+    </div>
+
+    <!-- Tasks Card -->
+    <div class="card grid-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Scheduled Tasks</span>
+        <button id="hb-trigger-all" onclick="triggerHeartbeat(this)">▶ Trigger Heartbeat Now</button>
+      </div>
+      <div id="hb-tasks-body">
+        <div class="stat-label">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- end #panel-heartbeat -->
+
+<!-- ══════════════ CALENDAR TAB ══════════════ -->
+<div class="tab-panel" id="panel-calendar" role="tabpanel" aria-labelledby="tab-calendar">
+  <div class="grid">
+
+    <!-- Weekly Digest Card -->
+    <div class="card grid-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Week Schedule</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="cal-mode-next" onchange="fetchCalendarWeek()" style="accent-color:var(--blue)"> Next week
+          </label>
+          <button id="cal-trigger-btn" onclick="triggerWeeklyDigest(this)">▶ Refresh Digest</button>
+        </div>
+      </div>
+      <div id="cal-digest-body">
+        <div class="stat-label" style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Upcoming Events Card -->
+    <div class="card grid-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span>Upcoming Events</span>
+        <span id="cal-events-count" style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div class="cal-filter-wrap" id="cal-filter-wrap">
+        <button class="cal-filter-pill active" onclick="filterCalEvents(7,   this)">Next 7 days</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(14,  this)">Next 2 weeks</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(30,  this)">Next month</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(90,  this)">Next 3 months</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(180, this)">Next 6 months</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(365, this)">Next 12 months</button>
+      </div>
+      <div id="cal-events-body">
+        <div class="stat-label" style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Add Event Card -->
+    <div class="card grid-full">
+      <div class="card-title">Add Event</div>
+      <div class="cal-add-form">
+        <input  class="full-col" id="cal-f-title"    placeholder="Event title *" type="text">
+        <input  id="cal-f-date"     placeholder="Date (YYYY-MM-DD) *" type="date">
+        <input  id="cal-f-time"     placeholder="Start time"          type="time" value="09:00">
+        <input  id="cal-f-end-time" placeholder="End time"            type="time" value="10:00">
+        <input  id="cal-f-location" placeholder="Location"            type="text">
+        <select id="cal-f-recurrence">
+          <option value="none">No recurrence</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+        <input  id="cal-f-reminder" placeholder="Reminder (minutes before)" type="number" value="30">
+        <select id="cal-f-remind-unit" style="display:none"></select>
+        <textarea class="full-col" id="cal-f-desc"  placeholder="Notes / description (optional)"></textarea>
+        <button class="full-col" id="cal-add-submit" onclick="addCalendarEvent(this)">➕ Add to Calendar</button>
+      </div>
+      <div id="cal-add-msg" style="margin-top:8px;font-size:12px"></div>
+    </div>
+
+  </div>
+</div><!-- end #panel-calendar -->
+
+<!-- ══════════════ CHAT TAB ══════════════ -->
+<div class="tab-panel active" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+  <!-- Skill Chips -->
+  <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <button id="prompts-toggle-btn" onclick="togglePrompts()" aria-controls="skill-chips" aria-expanded="true">
+      Premade Prompts <span id="prompts-arrow">▾</span>
+    </button>
+    <div style="display:flex;gap:6px">
+      <button id="chat-sessions-btn" onclick="openSessionsDrawer()">📂 Sessions</button>
+      <button id="chat-new-btn" onclick="newChatSession()">+ New Chat</button>
+    </div>
+  </div>
+  <div class="skill-chips" id="skill-chips">
+    <div class="stat-label">Loading skills…</div>
+  </div>
+
+  <!-- Context usage bar -->
+  <div class="ctx-bar-wrap" id="ctx-bar-wrap" style="display:none">
+    <div class="ctx-bar-track"><div class="ctx-bar-fill" id="ctx-bar-fill" style="width:0%"></div></div>
+    <span class="ctx-label" id="ctx-label">— / — tokens</span>
+  </div>
+
+  <!-- Messages -->
+  <div id="chat-messages" aria-live="polite" aria-label="Chat messages" style="flex:1;overflow-y:auto;padding:12px 0;display:flex;flex-direction:column;gap:16px;min-height:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:8px 0;">
+    <div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0;">
+      <div style="font-size:28px;margin-bottom:8px">❄️</div>
+      <div style="font-weight:600;color:var(--text2);margin-bottom:4px">Frostbite is ready</div>
+      <div>Ask anything, or pick a skill above to get started.</div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="chat-input-area">
+    <div class="chat-file-preview" id="chat-file-preview">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span>📎</span>
+        <span id="chat-file-name">file.txt</span>
+        <span id="chat-file-chars" style="color:var(--muted)"></span>
+      </div>
+      <button class="chat-file-remove" onclick="removeAttachment()" title="Remove">✕</button>
+    </div>
+    <div class="chat-input-row">
+      <button class="chat-action-btn" onclick="document.getElementById('file-input').click()" title="Attach file">📎</button>
+      <input type="file" id="file-input" style="display:none" onchange="handleFileSelect(this)" accept=".txt,.md,.json,.yaml,.yml,.csv,.py,.js,.ts,.html,.css,.xml,.sh,.sql,.toml,.ini,.log,.env,.rs,.go,.java,.c,.cpp,.h,.rb,.php,.pdf,.docx">
+      <textarea id="chat-input" placeholder="Message Frostbite… (Enter to send, Shift+Enter for newline)" rows="1" onkeydown="handleChatKey(event)" oninput="autoGrowTextarea(this)" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"></textarea>
+      <button id="chat-send-btn" onclick="sendChatMessage()">Send ↑</button>
+    </div>
+    <div class="chat-hint">Supported files: text/code files, .pdf, .docx — model: Qwen3.5-9B (text only, no images)</div>
+  </div>
+</div><!-- end #panel-chat -->
+
+</div><!-- end #main-content -->
+
+<!-- Sessions drawer -->
+<div id="sessions-overlay" onclick="closeSessionsDrawer()"></div>
+<div id="sessions-drawer">
+  <div class="drawer-header">
+    <h2>📂 Conversations</h2>
+    <button class="drawer-close" onclick="closeSessionsDrawer()" title="Close">✕</button>
+  </div>
+  <div id="sessions-list">
+    <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Loading…</div>
+  </div>
+</div>
+
+<!-- Drag-and-drop overlay -->
+<div class="drop-overlay" id="drop-overlay">📎 Drop file to attach</div>
+
+<script>
+  // ── Mobile keyboard: keep layout fixed (iOS + Android) ──────────────────
+  (function() {
+    // When the soft keyboard opens, compute how much vertical space it takes
+    // and shift ONLY the chat panel up via --kb-height.
+    // The body itself never resizes, so the header/nav never jump.
+    if (window.visualViewport) {
+      function onVPChange() {
+        // Only apply keyboard offset when an input/textarea is actually focused.
+        // This prevents --kb-height from flickering when the user scrolls messages.
+        const active = document.activeElement;
+        const inputFocused = active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT');
+        if (!inputFocused) {
+          document.documentElement.style.setProperty('--kb-height', '0px');
+          return;
+        }
+        const kb = Math.max(0, window.innerHeight - window.visualViewport.offsetTop - window.visualViewport.height);
+        document.documentElement.style.setProperty('--kb-height', kb + 'px');
+        if (kb > 50) {
+          // Scroll messages to bottom so latest reply is visible above keyboard
+          const msgs = document.getElementById('chat-messages');
+          if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+        }
+      }
+      window.visualViewport.addEventListener('resize', onVPChange);
+      window.visualViewport.addEventListener('scroll', onVPChange);
+    }
+
+    // ── Suppress iOS prev/next/done toolbar ────────────────────────────────
+    // When chat textarea is focused, make all other interactive elements
+    // non-tabbable so iOS hides the navigation arrows in the toolbar.
+    const SKIP_ATTR = 'data-ti-saved';
+    function lockTabOrder() {
+      document.querySelectorAll('button, input, select, a[href], [tabindex]').forEach(el => {
+        if (el.id === 'chat-input') return;
+        const cur = el.getAttribute('tabindex');
+        el.setAttribute(SKIP_ATTR, cur !== null ? cur : '0');
+        el.setAttribute('tabindex', '-1');
+      });
+    }
+    function unlockTabOrder() {
+      document.querySelectorAll('[' + SKIP_ATTR + ']').forEach(el => {
+        const saved = el.getAttribute(SKIP_ATTR);
+        if (saved === '0') el.removeAttribute('tabindex');
+        else el.setAttribute('tabindex', saved);
+        el.removeAttribute(SKIP_ATTR);
+      });
+    }
+    document.addEventListener('focusin', function(e) {
+      if (e.target && e.target.id === 'chat-input') lockTabOrder();
+    });
+    document.addEventListener('focusout', function(e) {
+      if (e.target && e.target.id === 'chat-input') {
+        // Small delay so tap-to-send button still works
+        setTimeout(() => {
+          unlockTabOrder();
+          document.documentElement.style.setProperty('--kb-height', '0px');
+        }, 200);
+      }
+    });
+  })();
+
+  const REFRESH_INTERVAL = 15; // seconds
+  let countdown = REFRESH_INTERVAL;
+  let timer;
+
+  // ── Tab switching ─────────────────────────────────────────────────────────
+  let activeTab = 'chat';
+
+  function switchTab(name) {
+    activeTab = name;
+    document.querySelectorAll('.nav-item').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => {
+      p.classList.remove('active');
+      p.style.display = 'none';
+    });
+    const tab = document.getElementById(`tab-${name}`);
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    const panel = document.getElementById(`panel-${name}`);
+    panel.classList.add('active');
+    panel.style.display = 'flex';
+
+    if (name === 'heartbeat') fetchHeartbeat();
+    if (name === 'calendar')  fetchCalendarWeek();
+    if (name === 'chat')      loadSkills();
+  }
+
+  function toggleSidebar() {
+    if (window.innerWidth <= 520) {
+      document.body.classList.toggle('nav-open');
+    } else {
+      document.body.classList.toggle('nav-collapsed');
+      const collapsed = document.body.classList.contains('nav-collapsed');
+      try { localStorage.setItem('frostbite-nav', collapsed ? '1' : ''); } catch(e) {}
+    }
+  }
+
+  function toggleMobileMenu() {
+    document.body.classList.toggle('nav-open');
+  }
+
+  function togglePrompts() {
+    const chips = document.getElementById('skill-chips');
+    const arrow = document.getElementById('prompts-arrow');
+    const btn   = document.getElementById('prompts-toggle-btn');
+    const nowCollapsed = chips.classList.toggle('prompts-collapsed');
+    arrow.textContent = nowCollapsed ? '▸' : '▾';
+    btn.setAttribute('aria-expanded', String(!nowCollapsed));
+  }
+
+  // ── Keyboard nav for sidebar tabs ───────────────────────────────────────
+  (function() {
+    const tabs = ['chat', 'monitor', 'heartbeat', 'calendar'];
+    document.querySelector('.sidebar-nav')?.addEventListener('keydown', e => {
+      const idx = tabs.indexOf(activeTab);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const next = tabs[(idx + 1) % tabs.length];
+        switchTab(next);
+        document.getElementById(`tab-${next}`).focus();
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
+        switchTab(prev);
+        document.getElementById(`tab-${prev}`).focus();
+      }
+    });
+  })();
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  function pill(label, color) {
+    return `<span class="pill pill-${color}">${label}</span>`;
+  }
+
+  function statusPill(running, health) {
+    if (!running) return pill('stopped', 'red');
+    if (health === 'healthy')   return pill('healthy', 'green');
+    if (health === 'starting')  return pill('starting', 'yellow');
+    if (health === 'unhealthy') return pill('unhealthy', 'red');
+    return pill('running', 'green');
+  }
+
+  function barColor(pct) {
+    if (pct < 60) return 'green';
+    if (pct < 85) return 'yellow';
+    return 'red';
+  }
+
+  function bar(label, pct, detail) {
+    const c = barColor(pct);
+    return `
+      <div class="bar-wrap">
+        <div class="bar-label"><span>${label}</span><span>${detail}</span></div>
+        <div class="bar-track"><div class="bar-fill bar-${c}" style="width:${Math.min(pct,100)}%"></div></div>
+      </div>`;
+  }
+
+  function statRow(label, value) {
+    return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`;
+  }
+
+  // ── Monitor render functions ─────────────────────────────────────────────
+
+  function renderOverall(data) {
+    const banner = document.getElementById('overall-banner');
+    const text   = document.getElementById('overall-text');
+    const map = {
+      healthy: 'All systems operational',
+      degraded: 'Some services are degraded',
+      down:     'Critical — services are down',
+    };
+    banner.className = data.overall;
+    text.textContent = map[data.overall] || data.overall;
+  }
+
+  function renderContainers(containers) {
+    if (!containers || !containers.length) {
+      document.getElementById('containers-body').innerHTML = '<div class="stat-label">No data</div>';
+      return;
+    }
+    let html = '';
+    for (const c of containers) {
+      if (c.error) {
+        html += `<div class="stat-label" style="color:var(--red)">${c.error}</div>`;
+        continue;
+      }
+      html += `
+        <div class="container-row">
+          <div>
+            <div class="container-name">${c.name}</div>
+            <div class="container-meta">Up ${c.started_at} · Restarts: ${c.restart_count}</div>
+          </div>
+          <div class="container-right">${statusPill(c.running, c.health)}</div>
+        </div>`;
+    }
+    document.getElementById('containers-body').innerHTML = html;
+  }
+
+  function renderLLM(llm) {
+    let html = '';
+    const alive = llm.healthy;
+    html += statRow('Status', alive ? pill('online', 'green') : pill('offline', 'red'));
+    if (llm.model && llm.model !== '—') {
+      html += statRow('Model', `<span style="color:var(--blue);font-size:12px">${llm.model}</span>`);
+    }
+    if (llm.n_ctx && llm.n_ctx !== '—') {
+      html += statRow('Context', `${Number(llm.n_ctx).toLocaleString()} tokens`);
+    }
+    if (llm.slots_idle !== undefined && llm.slots_idle !== '—') {
+      const total = (llm.slots_idle || 0) + (llm.slots_processing || 0);
+      html += statRow('Slots', `${llm.slots_processing} busy / ${total} total`);
+    }
+    if (llm.health_status) {
+      html += statRow('Health msg', llm.health_status);
+    }
+    document.getElementById('llm-body').innerHTML = html;
+  }
+
+  function renderSystem(host) {
+    let html = '';
+    const cpuLabel = host.cpu_count ? `CPU (${host.cpu_count} cores)` : 'CPU';
+    html += statRow('Load (1m / 5m / 15m)', `${host.cpu_load_1m} / ${host.cpu_load_5m} / ${host.cpu_load_15m}`);
+    if (host.cpu_temp && host.cpu_temp !== '—') html += statRow('CPU Temp', host.cpu_temp);
+    html += bar(cpuLabel, host.cpu_percent, `${host.cpu_percent.toFixed(1)}%`);
+    html += bar('RAM', host.mem_percent, `${host.mem_used_gb} / ${host.mem_total_gb} GB`);
+    document.getElementById('system-body').innerHTML = html;
+  }
+
+  function renderNetwork(host) {
+    let html = '';
+    html += bar('Disk', host.disk_percent, `${host.disk_used_gb} / ${host.disk_total_gb} GB`);
+    html += `<div style="height:10px"></div>`;
+    html += statRow('↓ Recv Rate', `${host.net_rx_kbps} KB/s`);
+    html += statRow('↑ Send Rate', `${host.net_tx_kbps} KB/s`);
+    html += `<div style="height:6px"></div>`;
+    if (host.net_interfaces && host.net_interfaces.length) {
+      html += `<div class="card-title" style="margin-bottom:6px">Interfaces (cumulative)</div>`;
+      for (const iface of host.net_interfaces) {
+        html += `<div class="iface-row">
+          <span class="iface-name">${iface.name}</span>
+          <span class="iface-stat">↓ ${iface.rx_mb} MB &nbsp;↑ ${iface.tx_mb} MB</span>
+        </div>`;
+      }
+    }
+    document.getElementById('network-body').innerHTML = html;
+  }
+
+  function renderContainerDeepStats(cstats) {
+    if (!cstats || !cstats.length) {
+      document.getElementById('cstats-body').innerHTML = '<div class="stat-label">No data</div>';
+      return;
+    }
+    let html = '<div class="cstat-grid">';
+    for (const c of cstats) {
+      if (c.error) {
+        html += `<div class="cstat-card"><div class="stat-label" style="color:var(--red)">${c.error}</div></div>`;
+        continue;
+      }
+      if (!c.running) {
+        html += `<div class="cstat-card"><div class="cstat-name">${c.name} <span class="pill pill-red">stopped</span></div></div>`;
+        continue;
+      }
+      const cpuColor  = c.cpu_pct  > 80 ? 'red' : c.cpu_pct  > 50 ? 'yellow' : 'green';
+      const memColor  = c.mem_pct  > 80 ? 'red' : c.mem_pct  > 50 ? 'yellow' : 'blue';
+      const memLimit  = c.mem_limit_mb >= 1024 ? `${(c.mem_limit_mb/1024).toFixed(1)} GB` : `${c.mem_limit_mb} MB`;
+      const memUsed   = c.mem_usage_mb >= 1024 ? `${(c.mem_usage_mb/1024).toFixed(2)} GB` : `${c.mem_usage_mb} MB`;
+      html += `
+        <div class="cstat-card">
+          <div class="cstat-name">${c.name} <span class="pill pill-green">running</span></div>
+          <div class="cstat-row">
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">CPU</div>
+              <div class="cstat-metric-value" style="color:var(--${cpuColor})">${c.cpu_pct}%</div>
+              <div class="bar-track"><div class="bar-fill bar-${cpuColor}" style="width:${Math.min(c.cpu_pct,100)}%"></div></div>
+            </div>
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Memory</div>
+              <div class="cstat-metric-value" style="color:var(--${memColor})">${c.mem_pct}%</div>
+              <div class="bar-track"><div class="bar-fill bar-${memColor}" style="width:${Math.min(c.mem_pct,100)}%"></div></div>
+            </div>
+          </div>
+          <div class="cstat-row">
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Mem Usage</div>
+              <div class="cstat-metric-value" style="font-size:13px">${memUsed}</div>
+              <div style="font-size:10px;color:var(--muted)">of ${memLimit}</div>
+            </div>
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">PIDs</div>
+              <div class="cstat-metric-value">${c.pids}</div>
+            </div>
+          </div>
+          <div class="cstat-row">
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Net ↓ Recv</div>
+              <div class="cstat-metric-value" style="font-size:13px">${c.net_rx_kbps} KB/s</div>
+              <div style="font-size:10px;color:var(--muted)">${c.net_rx_mb} MB total</div>
+            </div>
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Net ↑ Send</div>
+              <div class="cstat-metric-value" style="font-size:13px">${c.net_tx_kbps} KB/s</div>
+              <div style="font-size:10px;color:var(--muted)">${c.net_tx_mb} MB total</div>
+            </div>
+          </div>
+          <div class="cstat-row">
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Disk Read</div>
+              <div class="cstat-metric-value" style="font-size:13px">${c.blk_read_mb} MB</div>
+            </div>
+            <div class="cstat-metric">
+              <div class="cstat-metric-label">Disk Write</div>
+              <div class="cstat-metric-value" style="font-size:13px">${c.blk_write_mb} MB</div>
+            </div>
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+    document.getElementById('cstats-body').innerHTML = html;
+  }
+
+  function renderGPU(gpus) {
+    if (!gpus || !gpus.length) {
+      document.getElementById('gpu-body').innerHTML = '<div class="stat-label">No GPU data</div>';
+      return;
+    }
+    let html = '';
+    for (const g of gpus) {
+      if (!g.available) {
+        html += `<div class="stat-label" style="color:var(--muted)">GPU unavailable: ${g.error || ''}</div>`;
+        continue;
+      }
+      html += `<div class="gpu-name">${g.name}</div>`;
+      html += statRow('Temperature', `${g.temp_c}°C`);
+      if (g.power_draw_w && g.power_limit_w) {
+        html += statRow('Power', `${g.power_draw_w.toFixed(0)}W / ${g.power_limit_w.toFixed(0)}W`);
+      }
+      html += bar('GPU Utilization', g.util_pct, `${g.util_pct.toFixed(0)}%`);
+      const vramUsed = (g.vram_used_mb / 1024).toFixed(1);
+      const vramTotal = (g.vram_total_mb / 1024).toFixed(1);
+      html += bar('VRAM', g.vram_percent, `${vramUsed} / ${vramTotal} GB`);
+    }
+    document.getElementById('gpu-body').innerHTML = html;
+  }
+
+  function renderSessions(sessions) {
+    let html = '';
+    html += `
+      <div style="display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:22px;font-weight:700;color:var(--text)">${sessions.active_sessions}</div>
+          <div style="font-size:11px;color:var(--muted)">Active Sessions</div>
+        </div>
+        <div>
+          <div style="font-size:22px;font-weight:700;color:var(--muted)">${sessions.total_sessions}</div>
+          <div style="font-size:11px;color:var(--muted)">Total (incl. archived)</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:12px;color:var(--muted)">Last Activity</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${sessions.last_activity || '—'}</div>
+        </div>
+      </div>`;
+    if (sessions.agents && sessions.agents.length) {
+      html += `<div style="margin-bottom:12px;font-size:12px;color:var(--muted)">
+        Agents: ${sessions.agents.map(a => `<span style="color:var(--blue);margin-right:6px">${a}</span>`).join('')}
+      </div>`;
+    }
+    html += `<div class="card-title" style="margin-bottom:8px">Recent Errors</div>`;
+    if (!sessions.recent_errors || !sessions.recent_errors.length) {
+      html += `<div class="no-errors">✓ No recent errors</div>`;
+    } else {
+      html += '<ul class="error-list">';
+      for (const e of sessions.recent_errors) {
+        html += `<li class="error-item">
+          <div class="error-time">${e.time} · session ${e.session}</div>
+          <div class="error-msg">${e.error}</div>
+        </li>`;
+      }
+      html += '</ul>';
+    }
+    document.getElementById('sessions-body').innerHTML = html;
+  }
+
+  // ── Monitor fetch ─────────────────────────────────────────────────────────
+
+  async function fetchData() {
+    try {
+      const res = await fetch('/api/status');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setConnStatus(true);
+      renderOverall(data);
+      renderContainers(data.containers);
+      renderLLM(data.llm);
+      renderSystem(data.host);
+      renderNetwork(data.host);
+      renderGPU(data.gpu);
+      renderContainerDeepStats(data.cstats);
+      renderSessions(data.sessions);
+      // Store context window limit for chat usage bar
+      if (data.llm && data.llm.n_ctx && data.llm.n_ctx !== '—') {
+        nCtx = parseInt(data.llm.n_ctx, 10) || 0;
+      }
+      document.getElementById('last-updated').textContent = `Updated: ${_localNow()}`;
+      document.getElementById('loading').style.display = 'none';
+      clearInterval(timer);
+      countdown = REFRESH_INTERVAL;
+      startCountdown();
+    } catch (err) {
+      setConnStatus(false);
+      showToast(`Fetch failed: ${err.message}`, 'error');
+    }
+  }
+
+  function startCountdown() {
+    const el = document.getElementById('countdown');
+    timer = setInterval(() => {
+      countdown--;
+      el.textContent = `Next refresh in ${countdown}s`;
+      if (countdown <= 0) {
+        clearInterval(timer);
+        fetchData();
+      }
+    }, 1000);
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = type ? `toast-${type}` : '';
+    t.style.display = 'block';
+    clearTimeout(t._tid);
+    t._tid = setTimeout(() => { t.style.display = 'none'; }, 5000);
+  }
+
+  function setConnStatus(ok) {
+    const el = document.getElementById('conn-indicator');
+    const txt = document.getElementById('conn-text');
+    if (!el) return;
+    el.classList.toggle('conn-ok', ok);
+    el.classList.toggle('conn-err', !ok);
+    txt.textContent = ok ? 'Connected' : 'Disconnected';
+  }
+
+  // ── Heartbeat ─────────────────────────────────────────────────────────────
+
+  // ── Timezone helpers ──────────────────────────────────────────────────────────
+  function _localTz() { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+  function _tzAbbr(d) {
+    return new Intl.DateTimeFormat('en', { timeZoneName: 'short', timeZone: _localTz() })
+      .formatToParts(d || new Date()).find(p => p.type === 'timeZoneName')?.value || _localTz();
+  }
+  function _localNow() {
+    const d = new Date();
+    return d.toLocaleString('en-US', {
+      timeZone: _localTz(), year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }) + ' ' + _tzAbbr(d);
+  }
+  function _fmtTs(ts) {
+    if (!ts) return '—';
+    try {
+      const d = new Date(typeof ts === 'number' ? ts * 1000 : ts);
+      return d.toLocaleString('en-US', {
+        timeZone: _localTz(), year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }) + ' ' + _tzAbbr(d);
+    } catch { return String(ts); }
+  }
+
+  async function fetchHeartbeat() {
+    try {
+      const res = await fetch('/api/heartbeat');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderHeartbeatStatus(data);
+      renderHeartbeatEvent(data);
+      renderHeartbeatTasks(data);
+    } catch (err) {
+      document.getElementById('hb-status-body').innerHTML =
+        `<div class="stat-label" style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+  }
+
+  function renderHeartbeatStatus(data) {
+    const running = data.running;
+    const lastChecks = (data.state || {}).lastChecks || {};
+    let html = '';
+    html += statRow('Status', running ? pill('running', 'yellow') : pill('idle', 'green'));
+    if (data.running_tasks && data.running_tasks.length) {
+      html += `<div style="margin-top:8px;font-size:11px;color:var(--muted)">Active tasks:</div>`;
+      for (const t of data.running_tasks) {
+        html += `<div class="stat-row"><span class="stat-label">${t.kind || t.type || 'task'}</span><span class="stat-value pill pill-yellow">${t.status || 'running'}</span></div>`;
+      }
+    }
+    if (Object.keys(lastChecks).length) {
+      html += `<div style="margin-top:12px;margin-bottom:6px" class="card-title">Last Check Times</div>`;
+      for (const [key, val] of Object.entries(lastChecks)) {
+        const color = val ? 'text2' : 'muted';
+        html += statRow(key, `<span style="color:var(--${color})">${val ? _fmtTs(val) : 'never'}</span>`);
+      }
+    }
+    document.getElementById('hb-status-body').innerHTML = html;
+  }
+
+  function renderHeartbeatEvent(data) {
+    const evt = data.last_event;
+    if (!evt) {
+      document.getElementById('hb-event-body').innerHTML =
+        '<div class="stat-label" style="color:var(--muted)">No heartbeat events recorded yet</div>';
+      return;
+    }
+    let html = '';
+    if (evt.raw) {
+      html += `<pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-all">${evt.raw}</pre>`;
+    } else {
+      for (const [k, v] of Object.entries(evt)) {
+        html += statRow(k, `<span style="font-size:12px;color:var(--text2)">${JSON.stringify(v)}</span>`);
+      }
+    }
+    document.getElementById('hb-event-body').innerHTML = html;
+  }
+
+  function renderHeartbeatTasks(data) {
+    const tasks = data.tasks || [];
+    const notes = (data.state || {}).notes || '';
+    if (!tasks.length) {
+      document.getElementById('hb-tasks-body').innerHTML =
+        '<div class="stat-label" style="color:var(--muted)">No tasks defined in HEARTBEAT.md</div>';
+      return;
+    }
+    let html = '';
+    for (const t of tasks) {
+      html += `<div class="hb-task-card">
+        <div class="hb-task-info">
+          <div class="hb-task-name">${t.name}</div>
+          <ul class="hb-task-bullets">${t.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+        </div>
+      </div>`;
+    }
+    if (notes) {
+      html += `<div style="margin-top:10px;font-size:11px;color:var(--muted);font-style:italic">📝 ${notes}</div>`;
+    }
+    document.getElementById('hb-tasks-body').innerHTML = html;
+  }
+
+  async function triggerHeartbeat(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Triggering…';
+    try {
+      const res = await fetch('/api/heartbeat/trigger', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      showToast('✅ Heartbeat triggered successfully!');
+      setTimeout(fetchHeartbeat, 2000);
+    } catch (err) {
+      showToast(`❌ Trigger failed: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Trigger Heartbeat Now';
+    }
+  }
+
+  // ── Calendar ─────────────────────────────────────────────────────────────
+
+  let _allCalEvents  = [];   // full 365-day cache
+  let _calFilterDays = 7;    // currently active filter
+
+  const _CAL_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const _CAL_MON  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function _calFmtDate(iso) {
+    // iso = YYYY-MM-DD
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    return `${_CAL_DAYS[dow]}, ${String(d).padStart(2,'0')} ${_CAL_MON[m-1]} ${y}`;
+  }
+
+  async function fetchCalendarWeek() {
+    const mode = document.getElementById('cal-mode-next')?.checked ? 'next' : 'remaining';
+    document.getElementById('cal-digest-body').innerHTML =
+      '<div class="stat-label" style="color:var(--muted)">Loading…</div>';
+    try {
+      const res  = await fetch(`/api/calendar/week?mode=${mode}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      renderCalendarDigest(data);
+    } catch (err) {
+      document.getElementById('cal-digest-body').innerHTML =
+        `<div class="stat-label" style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+    fetchCalendarEvents();
+  }
+
+  function renderCalendarDigest(data) {
+    if (!data.week_start) {
+      document.getElementById('cal-digest-body').innerHTML =
+        '<div class="cal-empty">No digest yet — click Refresh Digest to generate.</div>';
+      return;
+    }
+    const events = data.events || [];
+    const today  = new Date().toISOString().slice(0, 10);
+
+    // Build date range Mon→Sun (or today→Sun)
+    const dateRange = [];
+    let cur = new Date(data.week_start + 'T00:00:00');
+    const endD = new Date(data.week_end + 'T00:00:00');
+    while (cur <= endD) {
+      dateRange.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    // Group events by date
+    const byDate = {};
+    for (const ev of events) {
+      (byDate[ev.date] = byDate[ev.date] || []).push(ev);
+    }
+
+    const mode   = document.getElementById('cal-mode-next')?.checked ? 'WEEK AHEAD' : (new Date().getDay() === 1 ? 'THIS WEEK' : 'REMAINING WEEK');
+    const rangeLabel = `${_calFmtDate(data.week_start).slice(0, -5)} → ${_calFmtDate(data.week_end)}`;
+    let html = `<div class="cal-week-range">${mode}: ${rangeLabel}</div>`;
+
+    for (const dateStr of dateRange) {
+      const dayLabel = _calFmtDate(dateStr);
+      const isToday  = dateStr === today;
+      html += `
+        <div class="cal-week-header">
+          <span class="cal-day-name" style="${isToday ? 'color:var(--green)' : ''}">${dayLabel.split(',')[0]}${isToday ? ' · Today' : ''}</span>
+          <span class="cal-day-date">${dayLabel.slice(dayLabel.indexOf(',')+2)}</span>
+        </div>`;
+      const dayEvs = (byDate[dateStr] || []).sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      if (dayEvs.length) {
+        for (const ev of dayEvs) {
+          const timeStr = ev.all_day ? 'All day' : (ev.time ? (ev.end_time ? `${ev.time}–${ev.end_time}` : ev.time) : 'All day');
+          const loc  = ev.location    ? `<span>📍 ${escapeHtml(ev.location)}</span>` : '';
+          const desc = ev.description ? `<span>📝 ${escapeHtml(ev.description)}</span>` : '';
+          const link = ev.html_link   ? `<a href="${ev.html_link}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">Open in Google ↗</a>` : '';
+          html += `
+            <div class="cal-ev-card${isToday ? ' today-ev' : ''}">
+              <div class="cal-ev-time">${timeStr}</div>
+              <div class="cal-ev-info">
+                <div class="cal-ev-title">${escapeHtml(ev.title)}</div>
+                <div class="cal-ev-sub">${loc}${desc}${link}</div>
+              </div>
+              <button class="cal-ev-del" onclick="deleteCalendarEvent('${escapeHtml(ev.id)}',this)" title="Delete">✕</button>
+            </div>`;
+        }
+      } else {
+        html += `<div class="cal-day-free">✨ Free</div>`;
+      }
+    }
+    document.getElementById('cal-digest-body').innerHTML = html;
+  }
+
+  async function fetchCalendarEvents() {
+    try {
+      const res  = await fetch('/api/calendar/events?days=365');
+      const data = await res.json();
+      if (!res.ok) return;
+      _allCalEvents = data.events || [];
+      filterCalEvents(_calFilterDays);
+    } catch (e) { /* silent */ }
+  }
+
+  function filterCalEvents(days, pillBtn) {
+    _calFilterDays = days;
+    // Update pill active state
+    if (pillBtn) {
+      document.querySelectorAll('.cal-filter-pill').forEach(b => b.classList.remove('active'));
+      pillBtn.classList.add('active');
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() + days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const filtered = _allCalEvents.filter(ev => ev.date >= today && ev.date <= cutoffStr);
+    renderCalendarEvents(filtered);
+  }
+
+  function renderCalendarEvents(events) {
+    const body  = document.getElementById('cal-events-body');
+    const count = document.getElementById('cal-events-count');
+    if (!events.length) {
+      body.innerHTML = '<div class="cal-empty">No events in this range.</div>';
+      if (count) count.textContent = '0 events';
+      return;
+    }
+    if (count) count.textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+
+    const today = new Date().toISOString().slice(0, 10);
+    // Group by date
+    const byDate = {};
+    for (const ev of events) {
+      (byDate[ev.date] = byDate[ev.date] || []).push(ev);
+    }
+    const sortedDates = Object.keys(byDate).sort();
+    let html = '';
+    for (const dateStr of sortedDates) {
+      const isToday = dateStr === today;
+      const dayLabel = _calFmtDate(dateStr);
+      html += `
+        <div class="cal-week-header" style="margin-top:${html ? '12px' : '0'}">
+          <span class="cal-day-name" style="${isToday ? 'color:var(--green)' : ''}">${dayLabel.split(',')[0]}${isToday ? ' · Today' : ''}</span>
+          <span class="cal-day-date">${dayLabel.slice(dayLabel.indexOf(',')+2)}</span>
+        </div>`;
+      const dayEvs = byDate[dateStr].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      for (const ev of dayEvs) {
+        const timeStr = ev.all_day ? 'All day' : (ev.time ? (ev.end_time ? `${ev.time}–${ev.end_time}` : ev.time) : 'All day');
+        const loc  = ev.location    ? `<span>📍 ${escapeHtml(ev.location)}</span>` : '';
+        const desc = ev.description ? `<span>📝 ${escapeHtml(ev.description)}</span>` : '';
+        const link = ev.html_link   ? `<a href="${ev.html_link}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">Open in Google ↗</a>` : '';
+        html += `
+          <div class="cal-ev-card${isToday ? ' today-ev' : ''}">
+            <div class="cal-ev-time">${timeStr}</div>
+            <div class="cal-ev-info">
+              <div class="cal-ev-title">${escapeHtml(ev.title)}</div>
+              <div class="cal-ev-sub">${loc}${desc}${link}</div>
+            </div>
+            <button class="cal-ev-del" onclick="deleteCalendarEvent('${escapeHtml(ev.id)}',this)" title="Delete">✕</button>
+          </div>`;
+      }
+    }
+    body.innerHTML = html;
+  }
+
+  async function triggerWeeklyDigest(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    try {
+      const res  = await fetch('/api/calendar/week/trigger', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      document.getElementById('cal-mode-next').checked = false;
+      renderCalendarDigest(data);
+      showToast('✅ Weekly digest refreshed!');
+    } catch (err) {
+      showToast(`❌ Failed: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Refresh Digest';
+    }
+  }
+
+  async function addCalendarEvent(btn) {
+    const title = document.getElementById('cal-f-title').value.trim();
+    const date  = document.getElementById('cal-f-date').value.trim();
+    if (!title || !date) {
+      document.getElementById('cal-add-msg').innerHTML =
+        '<span style="color:var(--red)">Title and date are required.</span>';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving…';
+    document.getElementById('cal-add-msg').innerHTML = '';
+    const payload = {
+      title,
+      date,
+      time:             document.getElementById('cal-f-time').value     || '00:00',
+      end_time:         document.getElementById('cal-f-end-time').value  || '',
+      location:         document.getElementById('cal-f-location').value  || '',
+      recurrence:       document.getElementById('cal-f-recurrence').value|| 'none',
+      reminder_minutes: parseInt(document.getElementById('cal-f-reminder').value) || 30,
+      description:      document.getElementById('cal-f-desc').value      || '',
+    };
+    try {
+      const res = await fetch('/api/calendar/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      document.getElementById('cal-add-msg').innerHTML =
+        `<span style="color:var(--green)">✅ Added: ${escapeHtml(data.title)} on ${data.date}</span>`;
+      // Clear form
+      ['cal-f-title','cal-f-date','cal-f-location','cal-f-desc'].forEach(id =>
+        document.getElementById(id).value = '');
+      document.getElementById('cal-f-time').value = '09:00';
+      document.getElementById('cal-f-end-time').value = '10:00';
+      document.getElementById('cal-f-reminder').value = '30';
+      document.getElementById('cal-f-recurrence').value = 'none';
+      fetchCalendarEvents();
+    } catch (err) {
+      document.getElementById('cal-add-msg').innerHTML =
+        `<span style="color:var(--red)">❌ ${err.message}</span>`;
+    } finally {
+      btn.disabled       = false;
+      btn.textContent    = '➕ Add to Calendar';
+    }
+  }
+
+  async function deleteCalendarEvent(id, btn) {
+    if (!confirm('Delete this event?')) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/calendar/events/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `HTTP ${res.status}`); }
+      showToast('🗑️ Event deleted');
+      fetchCalendarEvents();
+    } catch (err) {
+      showToast(`❌ ${err.message}`);
+      btn.disabled = false;
+    }
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Skills chip loading ───────────────────────────────────────────────────
+
+  let skillsLoaded = false;
+
+  async function loadSkills() {
+    if (skillsLoaded) return;
+    try {
+      const res = await fetch('/api/skills');
+      if (!res.ok) return;
+      const data = await res.json();
+      renderSkillChips(data.skills || []);
+      skillsLoaded = true;
+    } catch (e) {
+      document.getElementById('skill-chips').innerHTML =
+        '<span class="stat-label" style="color:var(--muted)">Could not load skills</span>';
+    }
+  }
+
+  const SKILL_PROMPTS = {
+    'epub-downloader':         ['Find me an ebook on stoicism', 'Download "Atomic Habits" EPUB', 'Search books by Marcus Aurelius'],
+    'media-downloader':        ['Find and download a PDF', 'Search for audiobook downloads'],
+    'ph-credit-card-maximizer':['Best card for groceries this month', 'Which card for GrabFood?', 'Best card for online shopping'],
+    'ph-investment-advisor':   ['How should I allocate my salary?', 'Best MP2 vs REIT right now?', 'Explain today\'s BSP rate impact'],
+    'travel-advisor':          ['Plan a 3-day Bohol trip from Manila', 'Cheapest flights to Singapore?', 'What visa do I need for Japan?'],
+    'credit-card-advisor':     ['Best card for groceries', 'Which card for dining?'],
+  };
+
+  function renderSkillChips(skills) {
+    const container = document.getElementById('skill-chips');
+    if (!skills.length) {
+      container.innerHTML = '<span class="stat-label" style="color:var(--muted)">No skills found</span>';
+      return;
+    }
+    let html = '';
+    for (const s of skills) {
+      const prompts = SKILL_PROMPTS[s.dir] || SKILL_PROMPTS[s.name] || [];
+      const firstPrompt = prompts[0] || `Help me with ${s.name}`;
+      html += `<button class="skill-chip" onclick="useSkillPrompt(${JSON.stringify(firstPrompt)}, ${JSON.stringify(s.name)})" title="${(s.description||'').substring(0,100)}">${s.emoji||'🔧'} ${s.name}</button>`;
+    }
+    // Add a few general chips
+    html += `<button class="skill-chip" onclick="useSkillPrompt('Let\'s start fresh — what can you help me with?')">❄️ What can you do?</button>`;
+    html += `<button class="skill-chip" onclick="useSkillPrompt('Summarize what you know about me')">👤 What do you know about me?</button>`;
+    container.innerHTML = html;
+  }
+
+  function useSkillPrompt(text, skillName) {
+    const input = document.getElementById('chat-input');
+    input.value = text;
+    autoGrowTextarea(input);
+    sendChatMessage();
+  }
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  let chatHistory = [];    // [{role, content}]
+  let attachedFile = null; // {name, text, chars}
+  let isStreaming  = false;
+  let nCtx         = 0;    // context window limit from LLM server
+  let lastTotalTokens = 0; // tokens used in last turn
+
+  function updateContextBar() {
+    const wrap  = document.getElementById('ctx-bar-wrap');
+    const fill  = document.getElementById('ctx-bar-fill');
+    const label = document.getElementById('ctx-label');
+    if (!lastTotalTokens) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'flex';
+    const limit = nCtx || 0;
+    const used  = lastTotalTokens;
+    const pct   = limit ? Math.min(used / limit * 100, 100) : 0;
+    const pctStr = limit ? pct.toFixed(1) + '%' : '';
+    // Color: green < 60%, yellow < 85%, red >= 85%
+    const color = pct >= 85 ? 'var(--red)' : pct >= 60 ? 'var(--yellow)' : 'var(--green)';
+    fill.style.width      = pct + '%';
+    fill.style.background = color;
+    const usedFmt  = used.toLocaleString();
+    const limitFmt = limit ? limit.toLocaleString() : '?';
+    label.style.color  = color;
+    label.textContent  = `${usedFmt} / ${limitFmt} ctx tokens${pctStr ? ' (' + pctStr + ')' : ''}`;
+  }
+
+  function newChatSession() {
+    chatHistory = [];
+    attachedFile = null;
+    lastTotalTokens = 0;
+    removeAttachment();
+    document.getElementById('ctx-bar-wrap').style.display = 'none';
+    document.getElementById('chat-messages').innerHTML = `
+      <div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0;">
+        <div style="font-size:28px;margin-bottom:8px">❄️</div>
+        <div style="font-weight:600;color:var(--text2);margin-bottom:4px">New conversation started</div>
+        <div>Ask anything, or pick a skill above to get started.</div>
+      </div>`;
+  }
+
+  function handleChatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  }
+
+  function autoGrowTextarea(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  function appendMessage(role, content, isTyping = false) {
+    const container = document.getElementById('chat-messages');
+    // Remove the welcome placeholder if present
+    const placeholder = container.querySelector('[style*="New conversation started"], [style*="Frostbite is ready"]');
+    if (placeholder) placeholder.parentElement?.remove() || placeholder.remove();
+
+    const div = document.createElement('div');
+    div.className = `msg msg-${role === 'user' ? 'user' : 'klaw'}`;
+    const avatar = role === 'user' ? '👤' : '❄️';
+    const name   = role === 'user' ? 'You' : 'Frostbite';
+
+    if (isTyping) {
+      div.id = 'typing-msg';
+      div.innerHTML = `
+        <div class="msg-avatar">${avatar}</div>
+        <div class="msg-body">
+          <div class="msg-name">${name}</div>
+          <div class="msg-text" id="streaming-text">
+            <div class="typing-indicator">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      const rendered = (typeof marked !== 'undefined')
+        ? marked.parse(content)
+        : content.replace(/\n/g, '<br>');
+      div.innerHTML = `
+        <div class="msg-avatar">${avatar}</div>
+        <div class="msg-body">
+          <div class="msg-name">${name}</div>
+          <div class="msg-text">${rendered}</div>
+        </div>`;
+    }
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+  }
+
+  async function sendChatMessage() {
+    if (isStreaming) return;
+    const input = document.getElementById('chat-input');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    const sendBtn = document.getElementById('chat-send-btn');
+    isStreaming = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '⏳';
+    input.value = '';
+    autoGrowTextarea(input);
+
+    // Show user message
+    const userContent = text;
+    appendMessage('user', userContent);
+
+    // Build file badge if attached
+    if (attachedFile) {
+      const msgContainer = document.getElementById('chat-messages');
+      const lastMsg = msgContainer.lastElementChild;
+      if (lastMsg) {
+        const badge = document.createElement('div');
+        badge.className = 'msg-file-badge';
+        badge.textContent = `📎 ${attachedFile.name} (${attachedFile.chars.toLocaleString()} chars)`;
+        lastMsg.querySelector('.msg-body')?.appendChild(badge);
+      }
+    }
+
+    // Add to history
+    chatHistory.push({ role: 'user', content: userContent });
+
+    // Show streaming indicator
+    appendMessage('klaw', '', true);
+
+    try {
+      const payload = {
+        messages:  chatHistory,
+        file_text: attachedFile?.text  || null,
+        file_name: attachedFile?.name  || null,
+      };
+      // Clear attachment after use
+      const fileUsed = attachedFile;
+      removeAttachment();
+
+      const res = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const reader   = res.body.getReader();
+      const decoder  = new TextDecoder();
+      const streamEl = document.getElementById('streaming-text');
+      let fullText = '';
+      let buffer   = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) throw new Error(parsed.error);
+            // Capture usage stats from the final chunk
+            if (parsed.usage && parsed.usage.total_tokens) {
+              lastTotalTokens = parsed.usage.total_tokens;
+            }
+            const delta = parsed.choices?.[0]?.delta?.content || '';
+            if (delta) {
+              fullText += delta;
+              if (streamEl) {
+                streamEl.innerHTML = (typeof marked !== 'undefined')
+                  ? marked.parse(fullText)
+                  : fullText.replace(/\n/g, '<br>');
+                document.getElementById('chat-messages').scrollTop = 99999;
+              }
+            }
+          } catch (parseErr) {
+            if (parseErr.message !== 'Unexpected end of JSON input') {
+              console.warn('SSE parse error:', parseErr);
+            }
+          }
+        }
+      }
+
+      // Remove typing message, add final rendered message
+      document.getElementById('typing-msg')?.remove();
+      if (fullText) {
+        appendMessage('klaw', fullText);
+        chatHistory.push({ role: 'assistant', content: fullText });
+        updateContextBar();
+      }
+
+    } catch (err) {
+      document.getElementById('typing-msg')?.remove();
+      appendMessage('klaw', `⚠️ Error: ${err.message}`);
+    } finally {
+      isStreaming = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send ↑';
+    }
+  }
+
+  // ── Sessions drawer ─────────────────────────────────────────────────────
+
+  function openSessionsDrawer() {
+    document.getElementById('sessions-drawer').classList.add('open');
+    document.getElementById('sessions-overlay').classList.add('open');
+    loadSessionsList();
+  }
+
+  function closeSessionsDrawer() {
+    document.getElementById('sessions-drawer').classList.remove('open');
+    document.getElementById('sessions-overlay').classList.remove('open');
+  }
+
+  async function loadSessionsList() {
+    const list = document.getElementById('sessions-list');
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Loading…</div>';
+    try {
+      const res = await fetch('/api/sessions/list');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderSessionsList(data.sessions || []);
+    } catch (err) {
+      list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:12px">Error: ${err.message}</div>`;
+    }
+  }
+
+  function renderSessionsList(sessions) {
+    const list = document.getElementById('sessions-list');
+    if (!sessions.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">No sessions found</div>';
+      return;
+    }
+    list.innerHTML = sessions.map(s => `
+      <div class="sess-card" id="sess-${s.id}">
+        <div class="sess-preview">${escHtml(s.preview)}</div>
+        <div class="sess-meta">${s.message_count} messages &nbsp;·&nbsp; ${s.modified}</div>
+        <div class="sess-actions">
+          <button class="sess-continue-btn" onclick="continueSession('${s.id}')">▶ Continue</button>
+          <button class="sess-delete-btn" onclick="deleteSession('${s.id}', this)">🗑 Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function continueSession(sessionId) {
+    const btn = document.querySelector(`#sess-${sessionId} .sess-continue-btn`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/messages`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const messages = data.messages || [];
+      if (!messages.length) { showToast('Session has no messages to load'); return; }
+      // Reset chat and load session messages
+      chatHistory = [];
+      attachedFile = null;
+      lastTotalTokens = 0;
+      removeAttachment();
+      document.getElementById('ctx-bar-wrap').style.display = 'none';
+      const container = document.getElementById('chat-messages');
+      container.innerHTML = `
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:4px">
+          📂 Continued from saved session · ${messages.length} messages loaded
+        </div>`;
+      for (const msg of messages) {
+        chatHistory.push(msg);
+        appendMessage(msg.role, msg.content);
+      }
+      closeSessionsDrawer();
+      if (activeTab !== 'chat') switchTab('chat');
+    } catch (err) {
+      showToast(`❌ Could not load session: ${err.message}`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Continue'; }
+    }
+  }
+
+  async function deleteSession(sessionId, btn) {
+    if (!confirm('Delete this session? This cannot be undone.')) return;
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      document.getElementById(`sess-${sessionId}`)?.remove();
+      const remaining = document.querySelectorAll('#sessions-list .sess-card').length;
+      if (!remaining) {
+        document.getElementById('sessions-list').innerHTML =
+          '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">No sessions found</div>';
+      }
+    } catch (err) {
+      showToast(`❌ Delete failed: ${err.message}`);
+      btn.disabled = false;
+      btn.textContent = '🗑 Delete';
+    }
+  }
+
+  // ── File upload ───────────────────────────────────────────────────────────
+
+  async function handleFileSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    await uploadFile(file);
+    input.value = '';
+  }
+
+  async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    showToast(`📎 Reading ${file.name}…`);
+    try {
+      const res = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      attachedFile = { name: data.filename, text: data.text, chars: data.char_count };
+      const preview = document.getElementById('chat-file-preview');
+      const nameEl  = document.getElementById('chat-file-name');
+      const charEl  = document.getElementById('chat-file-chars');
+      nameEl.textContent = data.filename;
+      charEl.textContent = `${data.char_count.toLocaleString()} chars${data.truncated ? ' (truncated)' : ''}`;
+      preview.classList.add('active');
+      if (data.truncated) showToast(`⚠️ File truncated to 15,000 chars`);
+    } catch (err) {
+      showToast(`❌ File error: ${err.message}`);
+    }
+  }
+
+  function removeAttachment() {
+    attachedFile = null;
+    document.getElementById('chat-file-preview').classList.remove('active');
+    document.getElementById('chat-file-name').textContent = '';
+    document.getElementById('chat-file-chars').textContent = '';
+  }
+
+  // ── Drag-and-drop ─────────────────────────────────────────────────────────
+
+  let dragCounter = 0;
+  document.addEventListener('dragenter', e => {
+    dragCounter++;
+    if (activeTab === 'chat') {
+      document.getElementById('drop-overlay').classList.add('active');
+    }
+  });
+  document.addEventListener('dragleave', e => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      document.getElementById('drop-overlay').classList.remove('active');
+    }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', async e => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.getElementById('drop-overlay').classList.remove('active');
+    if (activeTab !== 'chat') return;
+    const file = e.dataTransfer.files[0];
+    if (file) await uploadFile(file);
+  });
+
+  // ── init ──────────────────────────────────────────────────────────────────
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+  }
+  try { if (localStorage.getItem('frostbite-nav')) document.body.classList.add('nav-collapsed'); } catch(e) {}
+  // Collapse prompts by default on mobile
+  if (window.innerWidth <= 520) {
+    const chips = document.getElementById('skill-chips');
+    const arrow = document.getElementById('prompts-arrow');
+    const btn   = document.getElementById('prompts-toggle-btn');
+    if (chips) chips.classList.add('prompts-collapsed');
+    if (arrow) arrow.textContent = '▸';
+    if (btn)   btn.setAttribute('aria-expanded', 'false');
+  }
+  // Close mobile nav overlay when tapping backdrop
+  document.addEventListener('click', e => {
+    if (document.body.classList.contains('nav-open') &&
+        !e.target.closest('#sidebar') &&
+        !e.target.closest('#mobile-menu-btn')) {
+      document.body.classList.remove('nav-open');
+    }
+  });
+  fetchData();
+  loadSkills();
+</script>
+</body>
+</html>

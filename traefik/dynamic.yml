@@ -1,0 +1,224 @@
+http:
+  routers:
+    # ── Chat  /chat/*  ────────────────────────────────────────────────────
+    chat:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/chat`)"
+      entryPoints:
+        - websecure
+      service: chat
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-chat
+      priority: 10
+
+    # ── Monitor  /monitor/*  ─────────────────────────────────────────────
+    monitor:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/monitor`)"
+      entryPoints:
+        - websecure
+      service: monitor
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-monitor
+      priority: 10
+
+    # ── Heartbeat  /heartbeat/*  ─────────────────────────────────────────
+    heartbeat:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/heartbeat`)"
+      entryPoints:
+        - websecure
+      service: heartbeat
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-heartbeat
+      priority: 10
+
+    # ── Calendar  /calendar/*  ───────────────────────────────────────────
+    calendar:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/calendar`)"
+      entryPoints:
+        - websecure
+      service: calendar
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-calendar
+      priority: 10
+
+    # ── Finance  /finance/*  ────────────────────────────────────────────────
+    finance:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/finance`)"
+      entryPoints:
+        - websecure
+      service: finance
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-finance
+      priority: 10
+
+    # ── Nutrition  /nutrition/*  ──────────────────────────────────────────
+    nutrition:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/nutrition`)"
+      entryPoints:
+        - websecure
+      service: nutrition
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+        - strip-nutrition
+      priority: 10
+
+    # ── Datasette (Central DB)  /data/*  ─────────────────────────────────
+    datasette:
+      rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/data`)"
+      entryPoints:
+        - websecure
+      service: datasette
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+      priority: 10
+
+    # ── Landing  /  (catch-all, lowest priority)  ────────────────────────
+    landing:
+      rule: "Host(`openclaw-frostbite.duckdns.org`)"
+      entryPoints:
+        - websecure
+      service: landing
+      tls:
+        certResolver: duckdns
+      middlewares:
+        - auth
+        - security-headers
+        - compress
+        - rate-limit
+      priority: 1
+
+  middlewares:
+    auth:
+      basicAuth:
+        usersFile: /etc/traefik/.htpasswd
+        removeHeader: true
+
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+    compress:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: "1m"
+
+    strip-chat:
+      stripPrefix:
+        prefixes:
+          - "/chat"
+
+    strip-monitor:
+      stripPrefix:
+        prefixes:
+          - "/monitor"
+
+    strip-heartbeat:
+      stripPrefix:
+        prefixes:
+          - "/heartbeat"
+
+    strip-calendar:
+      stripPrefix:
+        prefixes:
+          - "/calendar"
+
+    strip-finance:
+      stripPrefix:
+        prefixes:
+          - "/finance"
+
+    strip-nutrition:
+      stripPrefix:
+        prefixes:
+          - "/nutrition"
+
+  services:
+    chat:
+      loadBalancer:
+        servers:
+          - url: "http://chat:9094"
+
+    monitor:
+      loadBalancer:
+        servers:
+          - url: "http://monitor:9091"
+
+    heartbeat:
+      loadBalancer:
+        servers:
+          - url: "http://heartbeat:9092"
+
+    calendar:
+      loadBalancer:
+        servers:
+          - url: "http://calendar:9093"
+
+    finance:
+      loadBalancer:
+        servers:
+          - url: "http://finance:9096"
+
+    nutrition:
+      loadBalancer:
+        servers:
+          - url: "http://nutrition:9097"
+
+    datasette:
+      loadBalancer:
+        servers:
+          - url: "http://datasette:8001"
+
+    landing:
+      loadBalancer:
+        servers:
+          - url: "http://landing:9095"

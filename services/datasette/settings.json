@@ -1,0 +1,10 @@
+{
+  "default_page_size": 50,
+  "max_returned_rows": 1000,
+  "sql_time_limit_ms": 10000,
+  "num_sql_threads": 3,
+  "allow_download": false,
+  "suggest_facets": true,
+  "default_facet_size": 10,
+  "truncate_cells_html": 200
+}

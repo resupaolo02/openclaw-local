@@ -1,0 +1,151 @@
+title: OpenClaw Central Database
+description: >
+  Unified database for all OpenClaw microservices.
+  Use the SQL editor to write custom queries across all service data.
+license: Private
+license_url: null
+
+about: ← Back to Dashboard
+about_url: /
+
+extra_css_urls:
+  - /assets/openclaw.css
+
+databases:
+  openclaw:
+    description: >
+      Central database containing all OpenClaw service data.
+      Tables are grouped by service: finance (transactions, accounts, categories, expense_types)
+      and nutrition (food_log, food_database, daily_goals).
+    tables:
+      transactions:
+        description: >
+          Financial transactions — income, expenses, transfers.
+          Linked to accounts via account_id, categories via category_id,
+          transaction_types via transaction_type_id, and expense_types via
+          expense_type_id_primary/expense_type_id_secondary. Managed by the Finance service.
+        label_column: description
+      accounts:
+        description: >
+          Financial accounts — bank accounts, credit cards, wallets.
+          Primary key: account_id. Managed by the Finance service.
+        label_column: name
+      categories:
+        description: >
+          Transaction categories — Food, Transport, Salary, etc.
+          Primary key: category_id. Managed by the Finance service.
+        label_column: name
+      expense_types:
+        description: >
+          Expense type classifications — Personal, Family, Friends, Business, Work, Reimbursement.
+          Primary key: expense_type_id. Managed by the Finance service.
+        label_column: name
+      transaction_types:
+        description: >
+          Transaction type classifications — Exp., Income, Transfer-In, Transfer-Out, Income Balance, Expense Balance.
+          Primary key: transaction_type_id. Managed by the Finance service.
+        label_column: name
+      food_log:
+        description: >
+          Daily food intake log — meals with macro breakdowns.
+          Managed by the Nutrition service.
+        label_column: food_name
+      food_database:
+        description: >
+          Food reference database — Philippine dishes, USDA, OpenFoodFacts.
+          Managed by the Nutrition service.
+        label_column: food_name
+      daily_goals:
+        description: >
+          Daily nutritional goals — calorie and macro targets.
+          Managed by the Nutrition service.
+
+    queries:
+      finance_monthly_summary:
+        title: Finance — Monthly Summary
+        description: Income, expenses, and net savings per month
+        sql: |
+          SELECT
+            strftime('%Y-%m', t.date) AS month,
+            ROUND(SUM(CASE WHEN tt.name IN ('Income', 'Income Balance') THEN t.php ELSE 0 END), 2) AS income,
+            ROUND(SUM(CASE WHEN tt.name IN ('Exp.', 'Expense Balance') THEN t.php ELSE 0 END), 2) AS expenses,
+            ROUND(
+              SUM(CASE WHEN tt.name IN ('Income', 'Income Balance') THEN t.php ELSE 0 END) -
+              SUM(CASE WHEN tt.name IN ('Exp.', 'Expense Balance') THEN t.php ELSE 0 END), 2
+            ) AS net_savings,
+            COUNT(*) AS transaction_count
+          FROM transactions t
+          LEFT JOIN accounts a ON t.account_id = a.account_id
+          LEFT JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
+          WHERE a.name NOT IN ('BDO Corporate AMEX')
+          GROUP BY month
+          ORDER BY month DESC
+
+      finance_top_categories:
+        title: Finance — Top Expense Categories
+        description: Biggest spending categories this month
+        sql: |
+          SELECT
+            c.name AS category,
+            ROUND(SUM(t.php), 2) AS total_php,
+            COUNT(*) AS count
+          FROM transactions t
+          LEFT JOIN accounts a ON t.account_id = a.account_id
+          LEFT JOIN categories c ON t.category_id = c.category_id
+          LEFT JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
+          WHERE tt.name IN ('Exp.', 'Expense Balance')
+            AND t.date >= date('now', 'start of month')
+            AND a.name NOT IN ('BDO Corporate AMEX')
+          GROUP BY c.name
+          ORDER BY total_php DESC
+          LIMIT 20
+
+      finance_credit_card_balances:
+        title: Finance — Credit Card Outstanding
+        description: Unpaid credit card expenses per card
+        sql: |
+          SELECT
+            a.name AS account,
+            ROUND(SUM(t.php), 2) AS unpaid_total,
+            COUNT(*) AS unpaid_count
+          FROM transactions t
+          JOIN accounts a ON t.account_id = a.account_id
+          LEFT JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
+          WHERE tt.name IN ('Exp.', 'Expense Balance')
+            AND t.payment_status = ''
+            AND a.group_name = 'Card'
+            AND a.name NOT IN ('BDO Corporate AMEX')
+          GROUP BY a.name
+          ORDER BY unpaid_total DESC
+
+      nutrition_today:
+        title: Nutrition — Today's Intake
+        description: Food log for today with macro totals
+        sql: |
+          SELECT
+            meal_type,
+            food_name,
+            serving_size,
+            ROUND(calories, 0) AS kcal,
+            ROUND(protein_g, 1) AS protein,
+            ROUND(carbs_g, 1) AS carbs,
+            ROUND(fat_g, 1) AS fat
+          FROM food_log
+          WHERE date = date('now')
+          ORDER BY time
+
+      cross_service_overview:
+        title: Cross-Service Overview
+        description: Quick stats across all services
+        sql: |
+          SELECT 'Finance — Transactions' AS metric, COUNT(*) AS value FROM transactions
+          UNION ALL
+          SELECT 'Finance — Accounts', COUNT(*) FROM accounts
+          UNION ALL
+          SELECT 'Finance — Categories', COUNT(*) FROM categories
+          UNION ALL
+          SELECT 'Finance — Expense Types', COUNT(*) FROM expense_types
+          UNION ALL
+          SELECT 'Nutrition — Foods in DB', COUNT(*) FROM food_database
+          UNION ALL
+          SELECT 'Nutrition — Log Entries', COUNT(*) FROM food_log
