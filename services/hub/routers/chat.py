@@ -56,16 +56,16 @@ EXEC_TOOL = {
             "Execute a shell command and return its stdout. "
             "Use this to run curl commands against local APIs, "
             "read files, or perform any system operation. "
-            "All services are at http://localhost:8000 with path prefixes: "
+            "All services are at http://hub:8000 with path prefixes: "
             "/finance/api/, /nutrition/api/, /calendar/api/, /monitor/api/. "
-            "Example: curl -s http://localhost:8000/finance/api/accounts"
+            "Example: curl -s http://hub:8000/finance/api/accounts"
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "cmd": {
                     "type": "string",
-                    "description": "The shell command to run (e.g. curl -s http://localhost:8000/finance/api/transactions?account_id=3)",
+                    "description": "The shell command to run (e.g. curl -s http://hub:8000/finance/api/transactions?account_id=3)",
                 }
             },
             "required": ["cmd"],

@@ -530,13 +530,13 @@ def build_system_prompt() -> str:
             lines = [
                 "## Your Available Skills\n",
                 "You have specialized skills. Match the user's request to the best skill and follow its approach.\n",
-                "When you need a skill's full instructions, call: exec(`curl -s http://localhost:8000/skill/<skill-name>/content`)\n",
-                "\nAll services are in the same hub. API base URLs for exec/curl:\n"
-                "- Finance: http://localhost:8000/finance/api/\n"
-                "- Nutrition: http://localhost:8000/nutrition/api/\n"
-                "- Calendar: http://localhost:8000/calendar/api/\n"
-                "- Monitor: http://localhost:8000/monitor/api/\n"
-                "- Core: http://localhost:8000/\n",
+                "When you need a skill's full instructions, call: exec(`curl -s http://hub:8000/skill/<skill-name>/content`)\n",
+                "\nAll services are in the hub container. API base URLs for exec/curl:\n"
+                "- Finance: http://hub:8000/finance/api/\n"
+                "- Nutrition: http://hub:8000/nutrition/api/\n"
+                "- Calendar: http://hub:8000/calendar/api/\n"
+                "- Monitor: http://hub:8000/monitor/api/\n"
+                "- Core: http://hub:8000/\n",
             ]
             for s in skills:
                 lines.append(f"- **{s['emoji']} {s['name']}**: {s['description']}")
