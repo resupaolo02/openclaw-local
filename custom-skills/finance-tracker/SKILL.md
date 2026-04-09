@@ -1,7 +1,7 @@
 ````skill
 ---
 name: finance-tracker
-description: Use when the user asks about their personal finances, expenses, income, spending, money, savings, transactions, account balances, net worth, financial summary, or wants to log/add/edit/delete a transaction. This skill has LIVE access to Paolo's real transaction database (3,741+ entries from Aug 2023–present). Triggers on: "expenses", "income", "spending", "how much did I spend", "how much did I earn", "transactions", "account balance", "net worth", "financial summary", "budget", "cash flow", "top categories", "add expense", "log expense", "add income", "log income", "track spending", "monthly summary", "what did I spend", "financial tracker", "finance", "money", "savings", "salary", "allowance", "credit card balance", "how much is in", "transfer", "my finances".
+description: Use when the user asks about their personal finances, expenses, income, spending, money, savings, transactions, account balances, net worth, financial summary, or wants to log/add/edit/delete a transaction. This skill has LIVE access to Paolo's real transaction database (5,076+ entries from Aug 2023–present) via both the Finance API at http://finance:9096 and directly via SQLite at /home/node/.openclaw/workspace/openclaw.db. Triggers on: "expenses", "income", "spending", "how much did I spend", "how much did I earn", "transactions", "account balance", "net worth", "financial summary", "budget", "cash flow", "top categories", "add expense", "log expense", "add income", "log income", "track spending", "monthly summary", "what did I spend", "financial tracker", "finance", "money", "savings", "salary", "allowance", "credit card balance", "how much is in", "transfer", "my finances", "openclaw.db", "finance database", "sqlite".
 version: 1.0.0
 metadata: { "openclaw": { "emoji": "💰" } }
 ---
@@ -14,15 +14,136 @@ Gives Paolo live read/write access to his personal finance database via the Fina
 
 - **User:** Paolo Resurreccion (PH-based, currency: PHP ₱)
 - **Finance service base URL:** `http://finance:9096` (internal Docker network)
-- **Database:** 3,741+ transactions, Aug 2023 – present
-- **17 accounts** tracked (see account list in references)
-- **All-time net worth:** ₱1,880,482.78
+- **Database:** 5,000+ transactions, Aug 2023 – present
+- **18 accounts** tracked (see account list below)
 - **Date format:** YYYY-MM-DD | **Amounts:** always in PHP unless stated otherwise
 - **Web UI:** available at `/finance/` for manual editing
+
+## Database — Direct Access
+
+The SQLite database is accessible directly from this agent. Use Python via `exec` for any query not covered by the API.
+
+- **Path (from this agent):** `/home/node/.openclaw/workspace/openclaw.db`
+- **Path (from finance service):** `/workspace/openclaw.db`
+
+### Direct Query Example
+```python
+import sqlite3
+conn = sqlite3.connect('/home/node/.openclaw/workspace/openclaw.db')
+cursor = conn.cursor()
+cursor.execute("SELECT ...")
+rows = cursor.fetchall()
+conn.close()
+```
+
+### Full Schema
+
+```sql
+-- accounts: account_id, name, group_name, icon, sort_order, cutoff_day, balance_offset
+-- transactions: id, date, time, note, amount, php, currency, description,
+--               payment_status, personal_amount, non_personal_amount,
+--               installment_num, installment_total,
+--               account_id, category_id, transaction_type_id,
+--               expense_type_id_primary, expense_type_id_secondary,
+--               created_at, updated_at
+-- categories:  category_id, name
+-- transaction_types: transaction_type_id, name
+-- expense_types: expense_type_id, name
+-- food_database, food_log, daily_goals (nutrition — see nutrition-tracker skill)
+```
+
+### Account List (account_id → name → group)
+```
+1  BDO Corporate AMEX          Card
+2  BDO UnionPay Gold            Card
+3  BPI Banko                    Savings
+4  BPI Gold Rewards             Card
+5  Cash                         Cash
+6  Eastwest Platinum            Card
+7  HSBC Visa Gold               Card
+8  LazPay Later                 Loan
+9  MP2 Savings                  Investment
+10 Maya Bank                    Savings
+11 Metrobank Travel Visa Sig.   Card
+12 RCBC Gold Mastercard         Card
+13 RCBC Hexagon                 Savings
+14 RCBC Hexagon Platinum        Card
+15 SPay Later                   Loan
+16 Unionbank Visa Platinum      Card
+17 Zed                          Card
+2110 BDO (Mastercard)           Card
+```
+
+### Reference Lookup Queries
+```python
+# Get all accounts with IDs
+cursor.execute("SELECT account_id, name, group_name FROM accounts ORDER BY sort_order")
+
+# Get all categories
+cursor.execute("SELECT category_id, name FROM categories ORDER BY name")
+
+# Get all transaction types
+cursor.execute("SELECT transaction_type_id, name FROM transaction_types")
+# Results: 1=Exp., 2=Expense Balance, 3=Income, 4=Income Balance, 5=Transfer-In, 6=Transfer-Out
+
+# Get all expense types
+cursor.execute("SELECT expense_type_id, name FROM expense_types")
+# Results: 1=Business, 2=Family, 3=Friends, 4=Personal, 5=Reimbursement, 6=Work
+```
+
+### Useful Direct SQL Patterns
+```python
+# Monthly spending by category (use this for complex breakdowns)
+cursor.execute("""
+    SELECT c.name, SUM(t.php) as total, COUNT(*) as count
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.category_id
+    JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
+    WHERE tt.name = 'Exp.' AND t.date LIKE '2026-04%'
+    GROUP BY c.category_id ORDER BY total DESC
+""")
+
+# Account balance (credits - debits)
+cursor.execute("""
+    SELECT a.name, a.group_name,
+        SUM(CASE WHEN tt.name IN ('Income','Transfer-In','Income Balance') THEN t.php ELSE 0 END) as credits,
+        SUM(CASE WHEN tt.name IN ('Exp.','Transfer-Out','Expense Balance') THEN t.php ELSE 0 END) as debits,
+        (a.balance_offset +
+         SUM(CASE WHEN tt.name IN ('Income','Transfer-In','Income Balance') THEN t.php ELSE 0 END) -
+         SUM(CASE WHEN tt.name IN ('Exp.','Transfer-Out','Expense Balance') THEN t.php ELSE 0 END)
+        ) as balance
+    FROM accounts a
+    LEFT JOIN transactions t ON a.account_id = t.account_id
+    LEFT JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
+    GROUP BY a.account_id ORDER BY a.sort_order
+""")
+
+# Unpaid credit card transactions
+cursor.execute("""
+    SELECT t.date, a.name as account, c.name as category, t.note, t.php
+    FROM transactions t
+    JOIN accounts a ON t.account_id = a.account_id
+    JOIN categories c ON t.category_id = c.category_id
+    WHERE t.payment_status = 'Unpaid' AND a.group_name = 'Card'
+    ORDER BY t.date DESC
+""")
+```
 
 ## Account Reference
 
 Full account list with current balances: `/app/custom-skills/finance-tracker/references/ACCOUNTS.md`
+
+## Data Access Strategy
+
+**Use the Finance API (`http://finance:9096`)** for standard queries — summaries, trends, category breakdowns, CRUD operations. Faster and simpler for common tasks.
+
+**Use Direct SQLite (`/home/node/.openclaw/workspace/openclaw.db`)** for:
+- Custom SQL queries not covered by the API
+- Complex multi-table joins or aggregations
+- When the user asks you to look at the raw data / database directly
+- Any question about where finance data is stored
+
+Both access the exact same database file. The API is a FastAPI wrapper around the same SQLite.
 
 ## API Reference
 
