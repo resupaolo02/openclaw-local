@@ -54,16 +54,18 @@ EXEC_TOOL = {
         "name": "exec",
         "description": (
             "Execute a shell command and return its stdout. "
-            "Use this to run curl commands against local services, "
+            "Use this to run curl commands against local APIs, "
             "read files, or perform any system operation. "
-            "Always call this tool instead of describing what you would do."
+            "All services are at http://localhost:8000 with path prefixes: "
+            "/finance/api/, /nutrition/api/, /calendar/api/, /monitor/api/. "
+            "Example: curl -s http://localhost:8000/finance/api/accounts"
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "cmd": {
                     "type": "string",
-                    "description": "The shell command to run (e.g. curl -s http://calendar:9093/api/calendar/week)",
+                    "description": "The shell command to run (e.g. curl -s http://localhost:8000/finance/api/transactions?account_id=3)",
                 }
             },
             "required": ["cmd"],
@@ -301,6 +303,7 @@ async def _stream_llm(messages: list[dict]) -> AsyncGenerator[str, None]:
     current_messages = _trim_messages_to_budget(list(messages), MAX_HISTORY_TOKENS)
 
     for _turn in range(MAX_TOOL_TURNS):
+        logger.info("Tool turn %d/%d", _turn + 1, MAX_TOOL_TURNS)
         payload = {
             "model":       active_model,
             "messages":    current_messages,
