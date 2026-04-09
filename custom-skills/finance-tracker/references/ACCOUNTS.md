@@ -1,6 +1,6 @@
 # Account Balances Reference
 
-> Auto-generated from finance database. For live data: `curl -s http://finance:9096/api/accounts`
+> Auto-generated from finance database. For live data: `curl -s http://hub:8000/finance/api/accounts`
 
 ## Current Account Balances (as of database import)
 

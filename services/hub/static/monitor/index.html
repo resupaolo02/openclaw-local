@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d1117">
+<title>Monitor — Frostbite</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+<style>
+  :root {
+    --bg:      #0d1117;
+    --card:    #161b22;
+    --border:  #30363d;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --red:     #f85149;
+    --blue:    #58a6ff;
+    --frost:   #a8d8ea;
+    --muted:   #7d8590;
+    --text:    #e6edf3;
+    --text2:   #c9d1d9;
+    --radius:  10px;
+    --shadow:  0 2px 8px rgba(0,0,0,.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Top Nav ── */
+  .topnav { display: flex; align-items: center; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; }
+  .topnav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .topnav a:hover { color: var(--text); background: rgba(255,255,255,.06); }
+  .topnav a.active { color: var(--frost); background: rgba(168,216,234,.1); }
+  .topnav .brand { font-weight: 600; color: var(--text); font-size: 15px; margin-right: 12px; }
+
+  /* ── Main ── */
+  .main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── Header ── */
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .header-meta { color: var(--muted); font-size: 12px; text-align: right; line-height: 1.6; }
+  #refresh-btn { background: var(--card); border: 1px solid var(--border); color: var(--blue); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  #refresh-btn:hover { background: #1f2937; }
+
+  /* ── Status banner ── */
+  #overall-banner { border-radius: var(--radius); padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 15px; border: 1px solid transparent; }
+  #overall-banner.healthy { background: rgba(63,185,80,.12); border-color: rgba(63,185,80,.3); }
+  #overall-banner.degraded { background: rgba(210,153,34,.12); border-color: rgba(210,153,34,.3); }
+  #overall-banner.down { background: rgba(248,81,73,.12); border-color: rgba(248,81,73,.3); }
+  #overall-banner .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; animation: pulse 2s ease-in-out infinite; }
+  #overall-banner.healthy .dot { background: var(--green); }
+  #overall-banner.degraded .dot { background: var(--yellow); }
+  #overall-banner.down .dot { background: var(--red); animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+  /* ── Grid ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .grid-full { grid-column: 1 / -1; }
+
+  /* ── Card ── */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+
+  /* ── Containers ── */
+  .container-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .container-row:last-child { border-bottom: none; }
+  .container-name { font-weight: 600; font-size: 13px; }
+  .container-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  /* ── Pills ── */
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; line-height: 1.6; }
+  .pill-green { background: rgba(63,185,80,.18); color: var(--green); }
+  .pill-yellow { background: rgba(210,153,34,.18); color: var(--yellow); }
+  .pill-red { background: rgba(248,81,73,.18); color: var(--red); }
+  .pill-gray { background: rgba(125,133,144,.15); color: var(--muted); }
+  .pill-blue { background: rgba(88,166,255,.15); color: var(--blue); }
+
+  /* ── Stat rows ── */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(48,54,61,.4); font-size: 13px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); font-size: 12px; }
+  .stat-value { font-size: 13px; font-weight: 500; color: var(--text2); }
+
+  /* ── Progress bars ── */
+  .bar-wrap { margin-top: 10px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .bar-track { height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .bar-green { background: var(--green); }
+  .bar-yellow { background: var(--yellow); }
+  .bar-red { background: var(--red); }
+  .bar-blue { background: var(--blue); }
+
+  /* ── GPU ── */
+  .gpu-name { font-weight: 600; font-size: 13px; margin-bottom: 10px; color: var(--text); }
+
+  /* ── Container deep stats ── */
+  .cstat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .cstat-card { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .cstat-name { font-weight: 600; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .cstat-row { display: flex; gap: 16px; margin-top: 10px; }
+  .cstat-metric { flex: 1; }
+  .cstat-metric-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .cstat-metric-value { font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0 4px; }
+
+  /* ── Net interfaces ── */
+  .iface-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(48,54,61,.3); font-size: 12px; }
+  .iface-row:last-child { border-bottom: none; }
+  .iface-name { color: var(--blue); font-family: monospace; }
+  .iface-stat { color: var(--muted); }
+
+  /* ── Error list ── */
+  .error-list { list-style: none; }
+  .error-item { background: rgba(248,81,73,.06); border-left: 3px solid var(--red); padding: 8px 12px; border-radius: 0 6px 6px 0; margin-bottom: 6px; font-size: 12px; }
+  .error-time { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+  .error-msg { color: var(--text2); word-break: break-word; }
+  .no-errors { color: var(--green); font-size: 13px; padding: 10px 0; }
+
+  /* ── Loading / Toast ── */
+  .conn-status { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .conn-ok .conn-dot { background: var(--green); } .conn-ok { color: var(--green); }
+  .conn-err .conn-dot { background: var(--red); } .conn-err { color: var(--red); }
+  #toast { display: none; position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 9999; background: var(--card); border: 1px solid var(--border); color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  #toast.toast-success { border-color: var(--green); color: var(--green); }
+  #toast.toast-error { border-color: var(--red); color: var(--red); }
+
+  /* ── Skeleton ── */
+  .skeleton { background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; height: 14px; }
+  .skeleton-bar { height: 6px; border-radius: 4px; margin: 10px 0 8px; }
+  .skeleton-row { display: flex; justify-content: space-between; gap: 12px; }
+  .skeleton-row .skeleton { flex: 1; }
+  .skeleton-wide { width: 80%; } .skeleton-short { width: 40%; }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="/" title="Back to Dashboard">← ❄️</a>
+</nav>
+
+<div id="toast" role="alert"></div>
+
+<div class="main">
+<header>
+  <h1>📡 System Monitor</h1>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="conn-status conn-ok" id="conn-indicator"><span class="conn-dot"></span><span id="conn-text">Connected</span></span>
+    <button id="refresh-btn" onclick="fetchData()">↻ Refresh</button>
+    <div class="header-meta"><div id="last-updated">—</div><div id="countdown"></div></div>
+  </div>
+</header>
+
+<div id="overall-banner" class="degraded"><div class="dot"></div><span id="overall-text">Loading…</span></div>
+
+<div class="grid">
+  <div class="card"><div class="card-title">Containers</div><div id="containers-body"><div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div></div></div>
+  <div class="card"><div class="card-title">LLM Server</div><div id="llm-body"><div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div></div></div>
+  <div class="card"><div class="card-title">Windows Host — CPU &amp; Memory</div><div id="system-body"><div class="skeleton-row"><div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-short"></div></div></div></div>
+  <div class="card"><div class="card-title">Windows Host — Disk &amp; Network</div><div id="network-body"><div class="skeleton skeleton-bar"></div></div></div>
+  <div class="card"><div class="card-title">GPU</div><div id="gpu-body"><div class="skeleton skeleton-bar"></div></div></div>
+  <div class="card grid-full"><div class="card-title">Microservices Health</div><div id="svchealth-body"><div class="stat-label">Loading…</div></div></div>
+  <div class="card grid-full"><div class="card-title">Container Deep Dive</div><div id="cstats-body"><div class="stat-label">Loading…</div></div></div>
+  <div class="card grid-full"><div class="card-title">Agent Sessions &amp; Errors</div><div id="sessions-body"><div class="skeleton-row"><div class="skeleton skeleton-short"></div><div class="skeleton skeleton-short"></div></div></div></div>
+</div>
+</div>
+
+<script>
+const REFRESH_INTERVAL = 15;
+let countdown = REFRESH_INTERVAL, timer;
+
+function pill(label, color) { return `<span class="pill pill-${color}">${label}</span>`; }
+function statusPill(running, health) {
+  if (!running) return pill('stopped', 'red');
+  if (health === 'healthy') return pill('healthy', 'green');
+  if (health === 'starting') return pill('starting', 'yellow');
+  if (health === 'unhealthy') return pill('unhealthy', 'red');
+  return pill('running', 'green');
+}
+function barColor(pct) { return pct < 60 ? 'green' : pct < 85 ? 'yellow' : 'red'; }
+function bar(label, pct, detail) {
+  const c = barColor(pct);
+  return `<div class="bar-wrap"><div class="bar-label"><span>${label}</span><span>${detail}</span></div><div class="bar-track"><div class="bar-fill bar-${c}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
+}
+function statRow(label, value) { return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`; }
+
+function _localTz() { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+function _localNow() {
+  const d = new Date();
+  const tz = new Intl.DateTimeFormat('en', { timeZoneName: 'short', timeZone: _localTz() }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || '';
+  return d.toLocaleString('en-US', { timeZone: _localTz(), year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' ' + tz;
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = type ? `toast-${type}` : '';
+  t.style.display = 'block';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.display = 'none'; }, 5000);
+}
+function setConnStatus(ok) {
+  const el = document.getElementById('conn-indicator'), txt = document.getElementById('conn-text');
+  if (!el) return;
+  el.classList.toggle('conn-ok', ok); el.classList.toggle('conn-err', !ok);
+  txt.textContent = ok ? 'Connected' : 'Disconnected';
+}
+
+function renderOverall(data) {
+  const banner = document.getElementById('overall-banner'), text = document.getElementById('overall-text');
+  const map = { healthy: 'All systems operational', degraded: 'Some services are degraded', down: 'Critical — services are down' };
+  banner.className = data.overall; text.textContent = map[data.overall] || data.overall;
+}
+function renderContainers(containers) {
+  if (!containers?.length) { document.getElementById('containers-body').innerHTML = '<div class="stat-label">No data</div>'; return; }
+  let html = '';
+  for (const c of containers) {
+    if (c.error) { html += `<div class="stat-label" style="color:var(--red)">${c.error}</div>`; continue; }
+    html += `<div class="container-row"><div><div class="container-name">${c.name}</div><div class="container-meta">Up ${c.started_at} · Restarts: ${c.restart_count}</div></div><div>${statusPill(c.running, c.health)}</div></div>`;
+  }
+  document.getElementById('containers-body').innerHTML = html;
+}
+function renderLLM(llm) {
+  let html = '';
+  html += statRow('Status', llm.healthy ? pill('online', 'green') : pill('offline', 'red'));
+  if (llm.model && llm.model !== '—') html += statRow('Model', `<span style="color:var(--blue);font-size:12px">${llm.model}</span>`);
+  if (llm.n_ctx && llm.n_ctx !== '—') html += statRow('Context', `${Number(llm.n_ctx).toLocaleString()} tokens`);
+  if (llm.slots_idle !== undefined && llm.slots_idle !== '—') { const total = (llm.slots_idle||0)+(llm.slots_processing||0); html += statRow('Slots', `${llm.slots_processing} busy / ${total} total`); }
+  if (llm.health_status) html += statRow('Health msg', llm.health_status);
+  document.getElementById('llm-body').innerHTML = html;
+}
+function renderSystem(host) {
+  let html = '';
+  const cpuLabel = host.cpu_count ? `CPU (${host.cpu_count} cores)` : 'CPU';
+  html += statRow('Load (1m / 5m / 15m)', `${host.cpu_load_1m} / ${host.cpu_load_5m} / ${host.cpu_load_15m}`);
+  if (host.cpu_temp && host.cpu_temp !== '—') html += statRow('CPU Temp', host.cpu_temp);
+  html += bar(cpuLabel, host.cpu_percent, `${host.cpu_percent.toFixed(1)}%`);
+  html += bar('RAM', host.mem_percent, `${host.mem_used_gb} / ${host.mem_total_gb} GB`);
+  document.getElementById('system-body').innerHTML = html;
+}
+function renderNetwork(host) {
+  let html = '';
+  html += bar('Disk', host.disk_percent, `${host.disk_used_gb} / ${host.disk_total_gb} GB`);
+  html += `<div style="height:10px"></div>`;
+  html += statRow('↓ Recv Rate', `${host.net_rx_kbps} KB/s`);
+  html += statRow('↑ Send Rate', `${host.net_tx_kbps} KB/s`);
+  html += `<div style="height:6px"></div>`;
+  if (host.net_interfaces?.length) {
+    html += `<div class="card-title" style="margin-bottom:6px">Interfaces (cumulative)</div>`;
+    for (const iface of host.net_interfaces) {
+      html += `<div class="iface-row"><span class="iface-name">${iface.name}</span><span class="iface-stat">↓ ${iface.rx_mb} MB &nbsp;↑ ${iface.tx_mb} MB</span></div>`;
+    }
+  }
+  document.getElementById('network-body').innerHTML = html;
+}
+function renderContainerDeepStats(cstats) {
+  if (!cstats?.length) { document.getElementById('cstats-body').innerHTML = '<div class="stat-label">No data</div>'; return; }
+  let html = '<div class="cstat-grid">';
+  for (const c of cstats) {
+    if (c.error) { html += `<div class="cstat-card"><div class="stat-label" style="color:var(--red)">${c.error}</div></div>`; continue; }
+    if (!c.running) { html += `<div class="cstat-card"><div class="cstat-name">${c.name} ${pill('stopped','red')}</div></div>`; continue; }
+    const cpuColor = c.cpu_pct > 80 ? 'red' : c.cpu_pct > 50 ? 'yellow' : 'green';
+    const memColor = c.mem_pct > 80 ? 'red' : c.mem_pct > 50 ? 'yellow' : 'blue';
+    const memLimit = c.mem_limit_mb >= 1024 ? `${(c.mem_limit_mb/1024).toFixed(1)} GB` : `${c.mem_limit_mb} MB`;
+    const memUsed  = c.mem_usage_mb >= 1024 ? `${(c.mem_usage_mb/1024).toFixed(2)} GB` : `${c.mem_usage_mb} MB`;
+    html += `<div class="cstat-card"><div class="cstat-name">${c.name} ${pill('running','green')}</div>
+      <div class="cstat-row"><div class="cstat-metric"><div class="cstat-metric-label">CPU</div><div class="cstat-metric-value" style="color:var(--${cpuColor})">${c.cpu_pct}%</div><div class="bar-track"><div class="bar-fill bar-${cpuColor}" style="width:${Math.min(c.cpu_pct,100)}%"></div></div></div>
+      <div class="cstat-metric"><div class="cstat-metric-label">Memory</div><div class="cstat-metric-value" style="color:var(--${memColor})">${c.mem_pct}%</div><div class="bar-track"><div class="bar-fill bar-${memColor}" style="width:${Math.min(c.mem_pct,100)}%"></div></div></div></div>
+      <div class="cstat-row"><div class="cstat-metric"><div class="cstat-metric-label">Mem Usage</div><div class="cstat-metric-value" style="font-size:13px">${memUsed}</div><div style="font-size:10px;color:var(--muted)">of ${memLimit}</div></div>
+      <div class="cstat-metric"><div class="cstat-metric-label">PIDs</div><div class="cstat-metric-value">${c.pids}</div></div></div>
+      <div class="cstat-row"><div class="cstat-metric"><div class="cstat-metric-label">Net ↓ Recv</div><div class="cstat-metric-value" style="font-size:13px">${c.net_rx_kbps} KB/s</div><div style="font-size:10px;color:var(--muted)">${c.net_rx_mb} MB total</div></div>
+      <div class="cstat-metric"><div class="cstat-metric-label">Net ↑ Send</div><div class="cstat-metric-value" style="font-size:13px">${c.net_tx_kbps} KB/s</div><div style="font-size:10px;color:var(--muted)">${c.net_tx_mb} MB total</div></div></div>
+      <div class="cstat-row"><div class="cstat-metric"><div class="cstat-metric-label">Disk Read</div><div class="cstat-metric-value" style="font-size:13px">${c.blk_read_mb} MB</div></div>
+      <div class="cstat-metric"><div class="cstat-metric-label">Disk Write</div><div class="cstat-metric-value" style="font-size:13px">${c.blk_write_mb} MB</div></div></div></div>`;
+  }
+  html += '</div>';
+  document.getElementById('cstats-body').innerHTML = html;
+}
+function renderServiceHealth(serviceHealth) {
+  const el = document.getElementById('svchealth-body');
+  if (!serviceHealth || !Object.keys(serviceHealth).length) {
+    el.innerHTML = '<div class="stat-label">No data</div>'; return;
+  }
+  const ORDER = ['core-api','chat','monitor','heartbeat','calendar','finance','nutrition','landing'];
+  const names = [...new Set([...ORDER, ...Object.keys(serviceHealth)])];
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:10px 18px;">';
+  for (const name of names) {
+    if (!(name in serviceHealth)) continue;
+    const ok = serviceHealth[name];
+    const color = ok ? 'var(--green)' : 'var(--red)';
+    const label = ok ? '● UP' : '● DOWN';
+    html += `<div style="display:flex;align-items:center;gap:6px;min-width:130px;">
+      <span style="color:${color};font-size:11px;font-weight:700;">${label}</span>
+      <span style="font-size:13px;font-weight:600;">${name}</span>
+    </div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+function renderGPU(gpus) {
+  if (!gpus?.length) { document.getElementById('gpu-body').innerHTML = '<div class="stat-label">No GPU data</div>'; return; }
+  let html = '';
+  for (const g of gpus) {
+    if (!g.available) { html += `<div class="stat-label" style="color:var(--muted)">GPU unavailable: ${g.error||''}</div>`; continue; }
+    html += `<div class="gpu-name">${g.name}</div>`;
+    html += statRow('Temperature', `${g.temp_c}°C`);
+    if (g.power_draw_w && g.power_limit_w) html += statRow('Power', `${g.power_draw_w.toFixed(0)}W / ${g.power_limit_w.toFixed(0)}W`);
+    html += bar('GPU Utilization', g.util_pct, `${g.util_pct.toFixed(0)}%`);
+    html += bar('VRAM', g.vram_percent, `${(g.vram_used_mb/1024).toFixed(1)} / ${(g.vram_total_mb/1024).toFixed(1)} GB`);
+  }
+  document.getElementById('gpu-body').innerHTML = html;
+}
+function renderSessions(sessions) {
+  let html = `<div style="display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap">
+    <div><div style="font-size:22px;font-weight:700;color:var(--text)">${sessions.active_sessions}</div><div style="font-size:11px;color:var(--muted)">Active Sessions</div></div>
+    <div><div style="font-size:22px;font-weight:700;color:var(--muted)">${sessions.total_sessions}</div><div style="font-size:11px;color:var(--muted)">Total (incl. archived)</div></div>
+    <div style="margin-left:auto;text-align:right"><div style="font-size:12px;color:var(--muted)">Last Activity</div><div style="font-size:13px;color:var(--text2);margin-top:2px">${sessions.last_activity||'—'}</div></div></div>`;
+  if (sessions.agents?.length) {
+    html += `<div style="margin-bottom:12px;font-size:12px;color:var(--muted)">Agents: ${sessions.agents.map(a => `<span style="color:var(--blue);margin-right:6px">${a}</span>`).join('')}</div>`;
+  }
+  html += `<div class="card-title" style="margin-bottom:8px">Recent Errors</div>`;
+  if (!sessions.recent_errors?.length) { html += `<div class="no-errors">✓ No recent errors</div>`; }
+  else {
+    html += '<ul class="error-list">';
+    for (const e of sessions.recent_errors) { html += `<li class="error-item"><div class="error-time">${e.time} · session ${e.session}</div><div class="error-msg">${e.error}</div></li>`; }
+    html += '</ul>';
+  }
+  document.getElementById('sessions-body').innerHTML = html;
+}
+
+async function fetchData() {
+  try {
+    const res = await fetch('/monitor/api/status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setConnStatus(true);
+    renderOverall(data); renderContainers(data.containers); renderLLM(data.llm);
+    renderSystem(data.host); renderNetwork(data.host); renderGPU(data.gpu);
+    renderContainerDeepStats(data.cstats); renderSessions(data.sessions);
+    renderServiceHealth(data.service_health);
+    document.getElementById('last-updated').textContent = `Updated: ${_localNow()}`;
+    clearInterval(timer); countdown = REFRESH_INTERVAL; startCountdown();
+  } catch (err) { setConnStatus(false); showToast(`Fetch failed: ${err.message}`, 'error'); }
+}
+function startCountdown() {
+  const el = document.getElementById('countdown');
+  timer = setInterval(() => { countdown--; el.textContent = `Next refresh in ${countdown}s`; if (countdown <= 0) { clearInterval(timer); fetchData(); } }, 1000);
+}
+fetchData();
+</script>
+</body>
+</html>

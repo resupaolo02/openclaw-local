@@ -8,21 +8,21 @@ metadata: { "openclaw": { "emoji": "📅" } }
 
 # Calendar Assistant
 
-Manages Paolo's **Google Calendar** (primary: `resupaolo@gmail.com`). Reads and writes real events via the Calendar microservice API. All calendar operations go through `http://calendar:9093` — do NOT attempt direct Google API calls.
+Manages Paolo's **Google Calendar** (primary: `resupaolo@gmail.com`). Reads and writes real events via the Calendar microservice API. All calendar operations go through `http://hub:8000/calendar` — do NOT attempt direct Google API calls.
 
 ## Core Context
 
 - **User:** Paolo (UTC+8, Asia/Manila)
 - **Calendar provider:** Google Calendar
 - **Primary Calendar ID:** `resupaolo@gmail.com`
-- **Calendar service base URL:** `http://calendar:9093` (internal Docker network)
+- **Calendar service base URL:** `http://hub:8000/calendar` (internal Docker network)
 - Dates → YYYY-MM-DD | Times → HH:MM 24h | Timezone → UTC+8
 
 ## API Reference (use `exec` with `curl`)
 
 ### List upcoming events
 ```bash
-curl -s http://calendar:9093/api/calendar/events
+curl -s http://hub:8000/calendar/api/calendar/events
 ```
 Returns: `{"events": [...], "count": N}`
 Each event: `id`, `title`, `date`, `time`, `end_time`, `all_day`, `description`, `location`, `html_link`
@@ -30,23 +30,23 @@ Each event: `id`, `title`, `date`, `time`, `end_time`, `all_day`, `description`,
 ### Get weekly digest
 ```bash
 # Remaining week (today → Sunday)
-curl -s http://calendar:9093/api/calendar/week
+curl -s http://hub:8000/calendar/api/calendar/week
 
 # Next week (Mon → Sun)
-curl -s http://calendar:9093/api/calendar/week?mode=next
+curl -s http://hub:8000/calendar/api/calendar/week?mode=next
 ```
 Returns: `{"digest": "...formatted text...", "events": [...], ...}`
 
 ### Create an event
 ```bash
-curl -s -X POST http://calendar:9093/api/calendar/events \
+curl -s -X POST http://hub:8000/calendar/api/calendar/events \
   -H "Content-Type: application/json" \
   -d '{"title":"TITLE","date":"YYYY-MM-DD","time":"HH:MM","end_time":"HH:MM","location":"...","description":"...","reminder_minutes":30,"all_day":false}'
 ```
 
 ### Delete an event
 ```bash
-curl -s -X DELETE "http://calendar:9093/api/calendar/events/<google-event-id>"
+curl -s -X DELETE "http://hub:8000/calendar/api/calendar/events/<google-event-id>"
 ```
 
 ## Workflow
@@ -113,7 +113,7 @@ MONDAY, 06 APR
 ## Heartbeat Integration (Sunday)
 
 When triggered on **Sunday** as part of heartbeat:
-1. Call `POST http://calendar:9093/api/calendar/week/trigger`
+1. Call `POST http://hub:8000/calendar/api/calendar/week/trigger`
    - This fetches next week's events from Google Calendar and caches the digest
 2. Parse the `digest` from the response
 3. Optionally message Paolo via Telegram with the digest
@@ -121,7 +121,7 @@ When triggered on **Sunday** as part of heartbeat:
 
 Trigger command:
 ```bash
-curl -s -X POST http://calendar:9093/api/calendar/week/trigger
+curl -s -X POST http://hub:8000/calendar/api/calendar/week/trigger
 ```
 
 ## Notes

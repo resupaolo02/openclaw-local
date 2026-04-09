@@ -12,7 +12,7 @@ Gives Paolo live read/write access to his personal calorie & macro tracker via t
 
 ## Core Context
 
-- **Service base URL:** `http://nutrition:9097` (internal Docker network)
+- **Service base URL:** `http://hub:8000/nutrition` (internal Docker network)
 - **Timezone:** UTC+8 (PH). Always use today's PH date when no date is specified.
 - **Meal types:** `breakfast`, `lunch`, `dinner`, `snack`
 - **Web UI:** `/nutrition/` for manual editing
@@ -36,101 +36,101 @@ The service has a built-in food database (`food_database` table) with **3 data s
 
 ## API Reference
 
-All calls use `exec` with `curl`. Base URL: `http://nutrition:9097`
+All calls use `exec` with `curl`. Base URL: `http://hub:8000/nutrition`
 
 ### Food Database — Search
 ```bash
 # Search food database (local + Open Food Facts + USDA)
-curl -s "http://nutrition:9097/api/foods/search?q=chicken+adobo&limit=10"
+curl -s "http://hub:8000/nutrition/api/foods/search?q=chicken+adobo&limit=10"
 # Search only local/seeded data (offline, faster)
-curl -s "http://nutrition:9097/api/foods/search?q=sinigang&limit=10&source=local"
+curl -s "http://hub:8000/nutrition/api/foods/search?q=sinigang&limit=10&source=local"
 # Filter by source: seeded | openfoodfacts | usda | custom
-curl -s "http://nutrition:9097/api/foods/search?q=jollibee&limit=15&source=seeded"
+curl -s "http://hub:8000/nutrition/api/foods/search?q=jollibee&limit=15&source=seeded"
 ```
 Returns: `{query, total, items: [{id, source, food_name, brand, serving_size, serving_g, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, tags}]}`
 
 ### Food Database — Barcode Lookup
 ```bash
-curl -s "http://nutrition:9097/api/foods/barcode/4800016012345"
+curl -s "http://hub:8000/nutrition/api/foods/barcode/4800016012345"
 ```
 Looks up by EAN/UPC barcode via Open Food Facts. Cached locally after first lookup.
 
 ### Food Database — Browse / CRUD
 ```bash
 # List all foods in database
-curl -s "http://nutrition:9097/api/foods?per_page=50"
+curl -s "http://hub:8000/nutrition/api/foods?per_page=50"
 # List only seeded PH foods
-curl -s "http://nutrition:9097/api/foods?source=seeded&per_page=100"
+curl -s "http://hub:8000/nutrition/api/foods?source=seeded&per_page=100"
 # Get specific food by id
-curl -s "http://nutrition:9097/api/foods/42"
+curl -s "http://hub:8000/nutrition/api/foods/42"
 # Add a custom food
-curl -s -X POST http://nutrition:9097/api/foods \
+curl -s -X POST http://hub:8000/nutrition/api/foods \
   -H "Content-Type: application/json" \
   -d '{"food_name":"Bicol Express","serving_size":"100g","serving_g":100,"calories":220,"protein_g":14,"carbs_g":8,"fat_g":15,"tags":"Filipino,Bicolano,coconut milk,pork"}'
 # Update a food entry
-curl -s -X PUT http://nutrition:9097/api/foods/42 \
+curl -s -X PUT http://hub:8000/nutrition/api/foods/42 \
   -H "Content-Type: application/json" \
   -d '{"calories":250,"protein_g":15}'
 # Delete a food entry
-curl -s -X DELETE http://nutrition:9097/api/foods/42
+curl -s -X DELETE http://hub:8000/nutrition/api/foods/42
 ```
 
 ### Quick Log (from Food Database)
 ```bash
 # Log 1 standard serving of food id=5 for lunch
-curl -s -X POST http://nutrition:9097/api/log/quick \
+curl -s -X POST http://hub:8000/nutrition/api/log/quick \
   -H "Content-Type: application/json" \
   -d '{"food_id":5,"meal_type":"lunch"}'
 # Log 1.5 servings
-curl -s -X POST http://nutrition:9097/api/log/quick \
+curl -s -X POST http://hub:8000/nutrition/api/log/quick \
   -H "Content-Type: application/json" \
   -d '{"food_id":5,"meal_type":"lunch","servings":1.5}'
 # Log by grams (auto-scales nutrition)
-curl -s -X POST http://nutrition:9097/api/log/quick \
+curl -s -X POST http://hub:8000/nutrition/api/log/quick \
   -H "Content-Type: application/json" \
   -d '{"food_id":5,"meal_type":"lunch","grams":250}'
 # With a specific date
-curl -s -X POST http://nutrition:9097/api/log/quick \
+curl -s -X POST http://hub:8000/nutrition/api/log/quick \
   -H "Content-Type: application/json" \
   -d '{"food_id":5,"meal_type":"dinner","date":"2026-04-06","servings":1}'
 ```
 
 ### Daily Summary
 ```bash
-curl -s "http://nutrition:9097/api/summary"
-curl -s "http://nutrition:9097/api/summary?day=2026-04-05"
+curl -s "http://hub:8000/nutrition/api/summary"
+curl -s "http://hub:8000/nutrition/api/summary?day=2026-04-05"
 ```
 
 ### Weekly Trend
 ```bash
-curl -s "http://nutrition:9097/api/weekly-trend?weeks=4"
+curl -s "http://hub:8000/nutrition/api/weekly-trend?weeks=4"
 ```
 
 ### List / Search Food Log
 ```bash
-curl -s "http://nutrition:9097/api/log?date=2026-04-06&per_page=100"
-curl -s "http://nutrition:9097/api/log?date=2026-04-06&meal_type=lunch"
-curl -s "http://nutrition:9097/api/log?date_from=2026-04-01&date_to=2026-04-06"
-curl -s "http://nutrition:9097/api/log?search=chicken&per_page=20"
+curl -s "http://hub:8000/nutrition/api/log?date=2026-04-06&per_page=100"
+curl -s "http://hub:8000/nutrition/api/log?date=2026-04-06&meal_type=lunch"
+curl -s "http://hub:8000/nutrition/api/log?date_from=2026-04-01&date_to=2026-04-06"
+curl -s "http://hub:8000/nutrition/api/log?search=chicken&per_page=20"
 ```
 
 ### Manual Log Entry
 ```bash
-curl -s -X POST http://nutrition:9097/api/log \
+curl -s -X POST http://hub:8000/nutrition/api/log \
   -H "Content-Type: application/json" \
   -d '{"date":"2026-04-06","time":"12:30:00","meal_type":"lunch","food_name":"Chicken Breast","serving_size":"150g","calories":247,"protein_g":46,"carbs_g":0,"fat_g":5.4}'
 ```
 
 ### Edit / Delete Log Entry
 ```bash
-curl -s -X PUT  http://nutrition:9097/api/log/<id> -H "Content-Type: application/json" -d '{"calories":300}'
-curl -s -X DELETE http://nutrition:9097/api/log/<id>
+curl -s -X PUT  http://hub:8000/nutrition/api/log/<id> -H "Content-Type: application/json" -d '{"calories":300}'
+curl -s -X DELETE http://hub:8000/nutrition/api/log/<id>
 ```
 
 ### Goals
 ```bash
-curl -s "http://nutrition:9097/api/goals"
-curl -s -X PUT http://nutrition:9097/api/goals \
+curl -s "http://hub:8000/nutrition/api/goals"
+curl -s -X PUT http://hub:8000/nutrition/api/goals \
   -H "Content-Type: application/json" \
   -d '{"calories":2000,"protein_g":150,"carbs_g":200,"fat_g":65,"fiber_g":25}'
 ```

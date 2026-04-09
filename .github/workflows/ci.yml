@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/hub/requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        env:
+          WORKSPACE_DIR: /tmp/test-workspace
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build hub Docker image
+        run: docker build -t openclaw-hub:test ./services/hub
+
+      - name: Verify hub starts
+        run: |
+          docker run -d --name hub-test \
+            -e WORKSPACE_DIR=/workspace \
+            -v /tmp/test-workspace:/workspace \
+            openclaw-hub:test
+          sleep 5
+          docker exec hub-test curl -sf http://localhost:8000/health || \
+            (docker logs hub-test && exit 1)
+          docker stop hub-test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Python syntax
+        run: python -m py_compile services/hub/app.py
+      
+      - name: Check router modules syntax
+        run: |
+          for f in services/hub/routers/*.py; do
+            python -m py_compile "$f"
+          done

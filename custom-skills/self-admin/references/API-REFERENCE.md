@@ -1,19 +1,11 @@
-# API Reference — All Services
+# API Reference — Hub Monolith
 
-All services use Docker DNS names internally. Base URLs:
-- `http://core-api:8000`
-- `http://llama:8080`
-- `http://monitor:9091`
-- `http://heartbeat:9092`
-- `http://calendar:9093`
-- `http://chat:9094`
-- `http://landing:9095`
-- `http://finance:9096`
-- `http://nutrition:9097`
+All APIs served by a single FastAPI monolith at `http://hub:8000`.
+External access via Traefik at `https://openclaw-frostbite.duckdns.org`.
 
 ---
 
-## Core API (:8000)
+## Core (root prefix)
 
 ### Health & System
 ```bash
@@ -45,18 +37,7 @@ POST /exec                     # Execute command in openclaw container
 
 ---
 
-## LLM / llama-server (:8080)
-
-```bash
-GET /health                    # Health check (used by Docker healthcheck)
-GET /v1/models                 # List available models
-POST /v1/chat/completions      # OpenAI-compatible chat completions
-# Body: {"model": "qwen3.5-9b", "messages": [...], "stream": true}
-```
-
----
-
-## Monitor (:9091)
+## Monitor (/monitor prefix)
 
 ```bash
 GET /                          # HTML dashboard
@@ -72,7 +53,7 @@ GET /api/health                # Health check
 
 ---
 
-## Heartbeat (:9092)
+## Heartbeat (/heartbeat prefix)
 
 ```bash
 GET /                          # HTML dashboard
@@ -83,7 +64,7 @@ GET /api/health                # Health check
 
 ---
 
-## Calendar (:9093)
+## Calendar (/calendar prefix)
 
 ### Events
 ```bash
@@ -118,7 +99,7 @@ GET /api/health                        # Health check
 
 ---
 
-## Chat (:9094)
+## Chat (/chat prefix)
 
 ```bash
 GET /                                  # HTML chat UI
@@ -142,7 +123,7 @@ GET /api/health                        # Health check
 
 ---
 
-## Finance (:9096)
+## Finance (/finance prefix)
 
 ### Transactions
 ```bash
@@ -207,7 +188,7 @@ GET /api/health                                # Health check
 
 ---
 
-## Nutrition (:9097)
+## Nutrition (/nutrition prefix)
 
 ### Food Database
 ```bash
@@ -255,9 +236,8 @@ GET /api/health                                # Health check
 
 ---
 
-## Landing (:9095)
+## Landing (root)
 
 ```bash
-GET /                          # HTML landing page
-GET /api/health                # Health check
+GET /                          # HTML landing page (hub root)
 ```
