@@ -15,22 +15,21 @@ docker compose up -d
 # Stop all services (keeps data intact)
 docker compose down
 
-# Start/stop a single service
-docker compose up -d chat
-docker compose stop chat
+# Restart the hub (all application modules)
+docker compose restart hub
 ```
 
 ### Rebuild After Code Changes
 
-When you edit a service's source code (e.g., `services/chat/app.py`):
+When you edit hub source code (e.g., `services/hub/routers/chat.py`):
 
 ```bash
-docker compose build chat && docker compose up -d --no-deps chat
+docker compose build hub && docker compose up -d --no-deps hub
 ```
 
 The `--no-deps` flag prevents restarting dependent services unnecessarily.
 
-### Rebuild All Services
+### Rebuild Everything
 
 ```bash
 docker compose build && docker compose up -d
@@ -39,17 +38,17 @@ docker compose build && docker compose up -d
 ### View Logs
 
 ```bash
-# Follow logs for a specific service
-docker compose logs -f chat
+# Follow hub logs (all modules in one stream)
+docker compose logs -f hub
 
-# Last 50 lines from core-api
-docker compose logs --tail=50 core-api
-
-# All services at once
-docker compose logs -f --tail=20
+# Last 50 lines
+docker compose logs --tail=50 hub
 
 # Search logs for errors
-docker compose logs chat 2>&1 | grep -i error
+docker compose logs hub 2>&1 | grep -i error
+
+# OpenClaw agent logs
+docker compose logs -f openclaw
 ```
 
 ### Restart After Config Changes
@@ -167,24 +166,17 @@ docker compose up -d --no-deps traefik
 ### Rebuild Local Services After Code Changes
 
 ```bash
-# Single service
-docker compose build chat && docker compose up -d --no-deps chat
-
-# All local services
-docker compose build && docker compose up -d
+# Hub (single service to rebuild)
+docker compose build hub && docker compose up -d --no-deps hub
 ```
 
 ### Rolling Updates (Minimal Downtime)
 
-Restart services one at a time to avoid a full outage:
+With the monolith architecture, updates are simpler — just rebuild and restart the hub:
 
 ```bash
-for svc in core-api monitor heartbeat calendar chat finance nutrition landing datasette; do
-  echo "Restarting $svc..."
-  docker compose build "$svc" && docker compose up -d --no-deps "$svc"
-  sleep 5
-done
-echo "✅ All services updated"
+docker compose build hub && docker compose up -d --no-deps hub
+echo "✅ Hub updated with all modules"
 ```
 
 ---
@@ -339,14 +331,14 @@ Add a new entry under `models.providers` in `openclaw-data/openclaw.json`:
 }
 ```
 
-### Chat Service Model Routing
+### Chat Module Model Routing
 
-The chat service (`services/chat/app.py`) supports dual providers:
+The chat module (`services/hub/routers/chat.py`) supports dual providers:
 
 - **Primary:** Used for general conversation — configured via `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`
 - **Coding:** Dedicated coding model — configured via `LLM_CODING_URL` / `LLM_CODING_KEY` / `LLM_CODING_MODEL`
 
-These are set in `.env` and passed to the chat container via `docker-compose.yml`:
+These are set in `.env` and passed to the hub container via `docker-compose.yml`:
 
 ```bash
 # .env
@@ -357,6 +349,12 @@ LLM_MODEL=gemini-3-flash-preview
 LLM_CODING_URL=https://openrouter.ai/api/v1/chat/completions
 LLM_CODING_KEY=your-openrouter-key
 LLM_CODING_MODEL=qwen/qwen3-coder:free
+```
+
+After changes, rebuild the hub:
+
+```bash
+docker compose restart hub
 ```
 
 ### Rate Limit Monitoring
@@ -375,20 +373,26 @@ LLM_CODING_MODEL=qwen/qwen3-coder:free
 
 Access at `https://your-domain.duckdns.org/monitor` (requires basic auth).
 
-Shows: CPU, RAM, GPU utilization, and all microservice health status.
+Shows: CPU, RAM, GPU utilization, and container health status.
 
 ### Health Check Endpoints
 
+All health checks go through the hub container (since ports aren't exposed to the host):
+
 ```bash
-# OpenClaw agent
+# OpenClaw agent (port exposed to host)
 curl -sf http://localhost:18789/health
 
-# Core API
-curl -sf http://localhost:8000/health
+# Hub - core health
+docker exec hub curl -sf http://localhost:8000/health
 
-# All microservices (from inside Docker network)
-# monitor, heartbeat, calendar, chat, finance, nutrition, landing
-curl -sf http://localhost:<port>/api/health
+# Hub - module health checks
+docker exec hub curl -sf http://localhost:8000/chat/api/health
+docker exec hub curl -sf http://localhost:8000/finance/api/health
+docker exec hub curl -sf http://localhost:8000/nutrition/api/health
+docker exec hub curl -sf http://localhost:8000/calendar/api/health
+docker exec hub curl -sf http://localhost:8000/monitor/api/health
+docker exec hub curl -sf http://localhost:8000/heartbeat/api/health
 
 # Datasette
 curl -sf http://localhost:8001/
@@ -399,20 +403,17 @@ curl -sf http://localhost:8001/
 ```bash
 #!/bin/bash
 echo "=== OpenClaw Health Check ==="
-services=("openclaw:18789/health" "core-api:8000/health")
-api_services=("monitor:9091" "heartbeat:9092" "calendar:9093" "chat:9094" "landing:9095" "finance:9096" "nutrition:9097")
 
-for svc in "${services[@]}"; do
-  name="${svc%%:*}"
-  endpoint="${svc}"
-  status=$(curl -sf "http://localhost:${endpoint}" -o /dev/null -w "%{http_code}" 2>/dev/null)
-  [ "$status" = "200" ] && echo "✅ $name" || echo "❌ $name (HTTP $status)"
-done
+# OpenClaw agent (direct port)
+status=$(curl -sf "http://localhost:18789/health" -o /dev/null -w "%{http_code}" 2>/dev/null)
+[ "$status" = "200" ] && echo "✅ openclaw" || echo "❌ openclaw (HTTP $status)"
 
-for svc in "${api_services[@]}"; do
-  name="${svc%%:*}"
-  port="${svc##*:}"
-  status=$(curl -sf "http://localhost:${port}/api/health" -o /dev/null -w "%{http_code}" 2>/dev/null)
+# Hub modules (via docker exec)
+modules=("health:core" "chat/api/health:chat" "finance/api/health:finance" "nutrition/api/health:nutrition" "calendar/api/health:calendar" "monitor/api/health:monitor" "heartbeat/api/health:heartbeat")
+for mod in "${modules[@]}"; do
+  path="${mod%%:*}"
+  name="${mod##*:}"
+  status=$(docker exec hub curl -sf "http://localhost:8000/${path}" -o /dev/null -w "%{http_code}" 2>/dev/null)
   [ "$status" = "200" ] && echo "✅ $name" || echo "❌ $name (HTTP $status)"
 done
 
@@ -530,14 +531,22 @@ Or keep Gemini as primary and use local as a fallback in `openclaw.json`:
 
 ### Step 6: Start the LLM Service
 
+The llama service is behind a Docker Compose profile, so it only starts when explicitly requested:
+
 ```bash
-docker compose up -d llama
+docker compose --profile local-llm up -d llama
 # Wait for model loading (~30-60 seconds)
 docker compose logs -f llama
 # Look for: "server listening on 0.0.0.0:8080"
 
 # Verify health
 docker exec llama curl -sf http://localhost:8080/health && echo "✅ llama-server ready"
+```
+
+To stop the local LLM and free GPU VRAM:
+
+```bash
+docker compose stop llama
 ```
 
 ---

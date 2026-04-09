@@ -5,7 +5,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/chat`)"
       entryPoints:
         - websecure
-      service: chat
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -13,7 +13,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-chat
       priority: 10
 
     # ── Monitor  /monitor/*  ─────────────────────────────────────────────
@@ -21,7 +20,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/monitor`)"
       entryPoints:
         - websecure
-      service: monitor
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -29,7 +28,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-monitor
       priority: 10
 
     # ── Heartbeat  /heartbeat/*  ─────────────────────────────────────────
@@ -37,7 +35,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/heartbeat`)"
       entryPoints:
         - websecure
-      service: heartbeat
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -45,7 +43,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-heartbeat
       priority: 10
 
     # ── Calendar  /calendar/*  ───────────────────────────────────────────
@@ -53,7 +50,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/calendar`)"
       entryPoints:
         - websecure
-      service: calendar
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -61,7 +58,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-calendar
       priority: 10
 
     # ── Finance  /finance/*  ────────────────────────────────────────────────
@@ -69,7 +65,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/finance`)"
       entryPoints:
         - websecure
-      service: finance
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -77,7 +73,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-finance
       priority: 10
 
     # ── Nutrition  /nutrition/*  ──────────────────────────────────────────
@@ -85,7 +80,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`) && PathPrefix(`/nutrition`)"
       entryPoints:
         - websecure
-      service: nutrition
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -93,7 +88,6 @@ http:
         - security-headers
         - compress
         - rate-limit
-        - strip-nutrition
       priority: 10
 
     # ── Datasette (Central DB)  /data/*  ─────────────────────────────────
@@ -116,7 +110,7 @@ http:
       rule: "Host(`openclaw-frostbite.duckdns.org`)"
       entryPoints:
         - websecure
-      service: landing
+      service: hub
       tls:
         certResolver: duckdns
       middlewares:
@@ -152,73 +146,13 @@ http:
         burst: 200
         period: "1m"
 
-    strip-chat:
-      stripPrefix:
-        prefixes:
-          - "/chat"
-
-    strip-monitor:
-      stripPrefix:
-        prefixes:
-          - "/monitor"
-
-    strip-heartbeat:
-      stripPrefix:
-        prefixes:
-          - "/heartbeat"
-
-    strip-calendar:
-      stripPrefix:
-        prefixes:
-          - "/calendar"
-
-    strip-finance:
-      stripPrefix:
-        prefixes:
-          - "/finance"
-
-    strip-nutrition:
-      stripPrefix:
-        prefixes:
-          - "/nutrition"
-
   services:
-    chat:
+    hub:
       loadBalancer:
         servers:
-          - url: "http://chat:9094"
-
-    monitor:
-      loadBalancer:
-        servers:
-          - url: "http://monitor:9091"
-
-    heartbeat:
-      loadBalancer:
-        servers:
-          - url: "http://heartbeat:9092"
-
-    calendar:
-      loadBalancer:
-        servers:
-          - url: "http://calendar:9093"
-
-    finance:
-      loadBalancer:
-        servers:
-          - url: "http://finance:9096"
-
-    nutrition:
-      loadBalancer:
-        servers:
-          - url: "http://nutrition:9097"
+          - url: "http://hub:8000"
 
     datasette:
       loadBalancer:
         servers:
           - url: "http://datasette:8001"
-
-    landing:
-      loadBalancer:
-        servers:
-          - url: "http://landing:9095"

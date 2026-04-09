@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<title>Frostbite Command Center</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
+<style>
+  :root {
+    --bg:      #0d1117;
+    --card:    #161b22;
+    --border:  #30363d;
+    --green:   #3fb950;
+    --blue:    #58a6ff;
+    --frost:   #a8d8ea;
+    --muted:   #7d8590;
+    --text:    #e6edf3;
+    --text2:   #c9d1d9;
+    --radius:  10px;
+    --shadow:  0 2px 8px rgba(0,0,0,.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px; min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px 16px;
+  }
+  .hero { text-align: center; margin-bottom: 40px; }
+  .hero-icon { font-size: 56px; margin-bottom: 12px; }
+  .hero h1 { font-size: 28px; font-weight: 700; color: var(--frost); margin-bottom: 6px; }
+  .hero p { color: var(--muted); font-size: 14px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; max-width: 640px; width: 100%;
+  }
+  .service-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px 20px; text-align: center; text-decoration: none;
+    box-shadow: var(--shadow); transition: border-color .2s, transform .15s;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .service-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .service-icon { font-size: 32px; }
+  .service-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .service-desc { font-size: 12px; color: var(--muted); }
+
+  .footer { margin-top: 48px; font-size: 11px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">❄️</div>
+  <h1>Frostbite Command Center</h1>
+  <p>Your personal AI infrastructure at a glance.</p>
+</div>
+
+<div class="grid">
+  <a class="service-card" href="/chat/">
+    <div class="service-icon">💬</div>
+    <div class="service-name">Chat</div>
+    <div class="service-desc">Talk to Frostbite, your local AI assistant.</div>
+  </a>
+  <a class="service-card" href="/monitor/">
+    <div class="service-icon">�</div>
+    <div class="service-name">Monitor</div>
+    <div class="service-desc">System health, containers, GPU & network.</div>
+  </a>
+
+  <a class="service-card" href="/calendar/">
+    <div class="service-icon">📅</div>
+    <div class="service-name">Calendar</div>
+    <div class="service-desc">Google Calendar, weekly digest &amp; events.</div>
+  </a>
+  <a class="service-card" href="/finance/">
+    <div class="service-icon">💰</div>
+    <div class="service-name">Finance</div>
+    <div class="service-desc">Expenses, income, assets &amp; financial tracker.</div>
+  </a>
+  <a class="service-card" href="/nutrition/">
+    <div class="service-icon">🥗</div>
+    <div class="service-name">Nutrition</div>
+    <div class="service-desc">Daily food log, macros, goals &amp; trend tracking.</div>
+  </a>
+  <a class="service-card" href="/data/">
+    <div class="service-icon">🗄️</div>
+    <div class="service-name">Database</div>
+    <div class="service-desc">Browse &amp; query the central database via SQL.</div>
+  </a>
+</div>
+
+<div class="footer">Powered by OpenClaw · Running locally on your hardware</div>
+
+</body>
+</html>

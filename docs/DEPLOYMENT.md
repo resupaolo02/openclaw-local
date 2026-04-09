@@ -21,20 +21,13 @@ Step-by-step guide to deploying the OpenClaw Local stack on Linux, macOS, or Win
 ## Architecture Overview
 
 ```
-traefik (:443 HTTPS)  ─→  path-based routing to all services
+traefik (:443 HTTPS)  ─→  path-based routing to hub
+hub (:8000)           ─→  single FastAPI monolith (all services consolidated)
 openclaw (:18789)     ─→  AI agent (ghcr.io/openclaw/openclaw:latest)
-core-api (:8000)      ─→  internal hub: Docker ops, skill loading, sessions
-chat (:9094)          ─→  LLM chat UI, streams from external providers
-monitor (:9091)       ─→  system dashboard
-heartbeat (:9092)     ─→  proactive agent poller
-calendar (:9093)      ─→  calendar service
-landing (:9095)       ─→  dashboard home page
-finance (:9096)       ─→  SQLite expense tracker
-nutrition (:9097)     ─→  SQLite food/macro tracker
-datasette (:8001)     ─→  central DB web UI
+datasette (:8001)     ─→  SQLite DB web browser (optional)
 ```
 
-All services except `openclaw` are built locally from `./services/<name>/`.
+The **hub** container replaces 8 former microservices (core-api, chat, monitor, heartbeat, calendar, landing, finance, nutrition) with a single FastAPI process. All modules are in `services/hub/routers/`.
 
 ---
 
@@ -61,7 +54,7 @@ docker compose version  # Docker Compose v2+
 #### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/openclaw-local.git
+git clone https://github.com/resupaolo02/openclaw-local.git
 cd openclaw-local
 ```
 
@@ -133,9 +126,11 @@ docker compose up -d
 # Check all containers are running
 docker compose ps
 
-# Test individual services
+# Test hub (all services)
+docker exec hub curl -sf http://localhost:8000/health && echo "✅ hub"
+
+# Test openclaw agent
 curl -sf http://localhost:18789/health && echo "✅ openclaw"
-curl -sf http://localhost:8000/health  && echo "✅ core-api"
 
 # Test HTTPS (replace with your domain)
 curl -sf https://your-domain.duckdns.org/chat -u admin:yourpassword && echo "✅ HTTPS working"
@@ -161,7 +156,7 @@ docker compose version
 #### 2. Clone and Configure
 
 ```bash
-git clone https://github.com/your-org/openclaw-local.git
+git clone https://github.com/resupaolo02/openclaw-local.git
 cd openclaw-local
 
 mkdir -p openclaw-data/workspace models traefik/acme
@@ -193,11 +188,12 @@ If you want external access (HTTPS via Traefik/DuckDNS):
 - Forward ports **80** and **443** on your router to your Mac's local IP
 - Set up DuckDNS the same way as Linux (use `crontab -e` or a LaunchAgent)
 
-For local-only use, skip Traefik and access services directly:
+For local-only use, skip Traefik and access services directly via the hub:
 
 ```bash
-# Access chat UI directly (no HTTPS)
-open http://localhost:9094
+# Access chat UI directly (requires port mapping in docker-compose.yml)
+# Add "ports: ['8000:8000']" to the hub service temporarily
+open http://localhost:8000/chat
 ```
 
 #### 5. Start the Stack
@@ -242,7 +238,7 @@ docker compose version
 ```bash
 # Inside WSL2 terminal
 cd ~
-git clone https://github.com/your-org/openclaw-local.git
+git clone https://github.com/resupaolo02/openclaw-local.git
 cd openclaw-local
 ```
 
@@ -412,18 +408,17 @@ CORS_ORIGIN=https://myname-openclaw.duckdns.org
 
 ## Service Ports & Routes
 
-| Path Prefix | Service | Internal Port | Health Check |
+| Path Prefix | Module | Internal URL | Health Check |
 |---|---|---|---|
-| `/chat` | chat | 9094 | `GET /api/health` |
-| `/monitor` | monitor | 9091 | `GET /api/health` |
-| `/heartbeat` | heartbeat | 9092 | `GET /api/health` |
-| `/calendar` | calendar | 9093 | `GET /api/health` |
-| `/finance` | finance | 9096 | `GET /api/health` |
-| `/nutrition` | nutrition | 9097 | `GET /api/health` |
-| `/data` | datasette | 8001 | `GET /` |
-| `/` (catch-all) | landing | 9095 | `GET /api/health` |
-| *(internal only)* | core-api | 8000 | `GET /health` |
-| *(port 18789)* | openclaw | 18789 | `GET /health` |
+| `/chat` | chat | `hub:8000/chat` | `GET /chat/api/health` |
+| `/monitor` | monitor | `hub:8000/monitor` | `GET /monitor/api/health` |
+| `/heartbeat` | heartbeat | `hub:8000/heartbeat` | `GET /heartbeat/api/health` |
+| `/calendar` | calendar | `hub:8000/calendar` | `GET /calendar/api/health` |
+| `/finance` | finance | `hub:8000/finance` | `GET /finance/api/health` |
+| `/nutrition` | nutrition | `hub:8000/nutrition` | `GET /nutrition/api/health` |
+| `/data` | datasette | `datasette:8001` | `GET /` |
+| `/` (catch-all) | landing | `hub:8000` | `GET /health` |
+| *(port 18789)* | openclaw | direct | `GET /health` |
 
 ---
 
@@ -483,12 +478,15 @@ docker compose restart traefik
 ### Service Health Check Failing
 
 ```bash
-# Quick health check for all services
-for svc in openclaw core-api chat monitor heartbeat calendar finance nutrition landing datasette; do
-  port=$(docker inspect --format='{{range $p, $conf := .Config.ExposedPorts}}{{$p}}{{end}}' $svc 2>/dev/null | grep -oP '\d+')
-  status=$(docker inspect --format='{{.State.Health.Status}}' $svc 2>/dev/null)
-  echo "$svc: $status"
-done
+# Quick health check — all modules are in the hub container
+docker exec hub curl -sf http://localhost:8000/health && echo "✅ hub (core)"
+docker exec hub curl -sf http://localhost:8000/chat/api/health && echo "✅ chat"
+docker exec hub curl -sf http://localhost:8000/finance/api/health && echo "✅ finance"
+docker exec hub curl -sf http://localhost:8000/nutrition/api/health && echo "✅ nutrition"
+docker exec hub curl -sf http://localhost:8000/calendar/api/health && echo "✅ calendar"
+docker exec hub curl -sf http://localhost:8000/monitor/api/health && echo "✅ monitor"
+docker exec hub curl -sf http://localhost:8000/heartbeat/api/health && echo "✅ heartbeat"
+curl -sf http://localhost:18789/health && echo "✅ openclaw"
 ```
 
 ### WSL2-Specific Issues

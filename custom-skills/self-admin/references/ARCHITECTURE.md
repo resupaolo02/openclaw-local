@@ -5,9 +5,9 @@
 **Host:** Single Linux machine with NVIDIA GPU
 **Domain:** `openclaw-frostbite.duckdns.org` (HTTPS via Let's Encrypt + DuckDNS)
 **Base directory:** `/home/resupaolo/openclaw-local/`
-**LLM:** Qwen3.5-9B-Q4_K_M (llama.cpp, CUDA, 32K context, Q4_K_M quantization)
+**LLM:** Multi-model (Gemini Flash primary, OpenRouter Qwen3-Coder for coding)
 
-## Service Map
+## Architecture: Monolith Hub (4 containers)
 
 ```
                     Internet
@@ -16,223 +16,194 @@
                    │Traefik │  :80 (→ :443 redirect)
                    │  :443  │  HTTPS + basic auth
                    └───┬────┘
-          ┌────────────┼────────────────────────────┐
-          │ path-based routing (prefix stripped)      │
-          │                                          │
-    /chat → chat:9094          /monitor → monitor:9091
-    /finance → finance:9096    /heartbeat → heartbeat:9092
-    /nutrition → nutrition:9097  /calendar → calendar:9093
-    / (catch-all) → landing:9095
+          ┌────────────┼──────────────┐
+          │  path-based routing       │
+          │  (full path forwarded)    │
+          │                           │
+          ▼                           ▼
+      hub:8000                   datasette:8001
+   (single FastAPI)              (optional)
           │
-          │  Internal-only (no Traefik route)
-          ├──── core-api:8000
-          ├──── llama:8080
+          ├── / (landing)
+          ├── /chat/*
+          ├── /finance/*
+          ├── /nutrition/*
+          ├── /calendar/*
+          ├── /monitor/*
+          ├── /heartbeat/*
+          └── /health, /containers, /exec, /sessions/*, /skills, /maintenance/*
+          │
+          │  Internal-only
           └──── openclaw:18789, :18791
 ```
 
-## Service Details
+## Container Details
 
-| Service | Port | Image/Build | Database | Depends On | Memory Limit |
-|---------|------|-------------|----------|------------|--------------|
-| llama | 8080 | `ghcr.io/ggml-org/llama.cpp:server-cuda` | — | GPU | 16G |
-| openclaw | 18789 | `ghcr.io/openclaw/openclaw:latest` | JSONL sessions | llama | 4G |
-| core-api | 8000 | `./services/core-api` | — (reads sessions) | llama, openclaw | 512M |
-| monitor | 9091 | `./services/monitor` (nvidia/cuda base) | — | core-api | 512M |
-| heartbeat | 9092 | `./services/heartbeat` | JSON files | core-api | 256M |
-| calendar | 9093 | `./services/calendar` | JSON files | — | 256M |
-| chat | 9094 | `./services/chat` | — | llama, core-api | 512M |
-| landing | 9095 | `./services/landing` | — | — | 128M |
-| finance | 9096 | `./services/finance` | SQLite (`finance.db`) | — | 256M |
-| nutrition | 9097 | `./services/nutrition` | SQLite (`nutrition.db`) | — | 256M |
+| Container | Port | Image/Build | Purpose | Memory |
+|-----------|------|-------------|---------|--------|
+| hub | 8000 | `./services/hub` (CUDA base) | All APIs + web UIs | 1G |
+| openclaw | 18789 | `ghcr.io/openclaw/openclaw:latest` | AI agent | 4G |
+| traefik | 80,443 | `traefik:v3.4` | HTTPS reverse proxy | 256M |
+| datasette | 8001 | `datasetteproject/datasette` | SQLite browser (optional) | 256M |
 
 ## Data Flow
 
 ```
-User (Telegram/Web) → openclaw → llama-server (LLM inference)
+User (Telegram/Web) → openclaw → Gemini/OpenRouter (external LLM)
                          │
-                         ├→ core-api (skills, sessions, Docker ops)
-                         └→ exec curl commands to any internal service
+                         └→ exec curl http://hub:8000/... (all APIs in one place)
 
-Web UI (chat page) → chat service → llama-server (streaming)
-                         └→ core-api (skills, sessions, system prompt)
+Web UI → Traefik → hub:8000/{service}/... (no prefix stripping needed)
 
-monitor → core-api → Docker socket + llama health
-heartbeat → core-api → openclaw exec (heartbeat commands)
+All internal: hub handles everything in-process (no inter-service HTTP)
 ```
 
-## Inter-Service Communication
+## Hub Router Modules
 
-All services communicate over Docker DNS names (e.g., `http://core-api:8000`).
+All modules live in `services/hub/routers/`. Each is a FastAPI APIRouter:
 
-| Caller | Calls | Purpose |
-|--------|-------|---------|
-| openclaw | llama:8080 | LLM inference (OpenAI-compatible API) |
-| core-api | llama:8080 | LLM health check |
-| core-api | Docker socket | Container stats, exec |
-| chat | llama:8080 | Streaming completions |
-| chat | core-api:8000 | Skills, sessions, system prompt, exec |
-| monitor | core-api:8000 | Container stats, LLM status, sessions |
-| heartbeat | core-api:8000 | Exec OpenClaw CLI commands |
-
-**Standalone services** (no inter-service calls): calendar, finance, nutrition, landing
+| Module | Prefix | Source | Database |
+|--------|--------|--------|----------|
+| core | / (root) | Docker ops, exec, sessions, skills | — |
+| chat | /chat | LLM chat UI + streaming API | — |
+| finance | /finance | Transaction CRUD, summaries | SQLite (openclaw.db) |
+| nutrition | /nutrition | Food log, search, goals | SQLite (openclaw.db) |
+| calendar | /calendar | Google Calendar integration | JSON files |
+| monitor | /monitor | System/GPU metrics dashboard | — (reads /proc) |
+| heartbeat | /heartbeat | Heartbeat poller | — |
 
 ## File System Layout
 
 ```
 /home/resupaolo/openclaw-local/
-├── .env                          # Secrets (DUCKDNS_TOKEN, CORS_ORIGIN, TRAEFIK_BASIC_AUTH)
-├── docker-compose.yml            # All service definitions
-├── models/
-│   └── Qwen3.5-9B-Q4_K_M.gguf   # LLM model weights
-├── custom-skills/                # Mounted as /app/custom-skills/ in openclaw
-│   ├── SKILL_FORMAT.md           # Skill creation guide
-│   ├── self-admin/               # This skill
-│   ├── calendar-assistant/
-│   ├── epub-downloader/
-│   ├── finance-tracker/
-│   ├── media-downloader/
-│   ├── nutrition-tracker/
-│   ├── ph-credit-card-maximizer/
-│   ├── ph-investment-advisor/
-│   └── travel-advisor/
-├── services/                     # Microservice source code
-│   ├── core-api/app.py
-│   ├── monitor/app.py
-│   ├── heartbeat/app.py
-│   ├── calendar/app.py
-│   ├── chat/app.py
-│   ├── landing/app.py
-│   ├── finance/app.py
-│   └── nutrition/app.py
-├── openclaw-data/                # Mounted as /home/node/.openclaw in openclaw
-│   ├── workspace/                # Agent workspace (also mounted standalone)
-│   │   ├── AGENTS.md             # Behavioral rules
-│   │   ├── SOUL.md               # Agent identity/personality
-│   │   ├── USER.md               # User context
-│   │   ├── IDENTITY.md           # Name, timezone, owner
-│   │   ├── TOOLS.md              # Environment-specific notes
-│   │   ├── MEMORY.md             # Curated long-term memory
-│   │   ├── HEARTBEAT.md          # Heartbeat task checklist
-│   │   ├── BOOTSTRAP.md          # First-run setup (processed)
-│   │   ├── memory/               # Daily session logs (YYYY-MM-DD.md)
-│   │   ├── finance.db            # Finance SQLite database
-│   │   ├── nutrition.db          # Nutrition SQLite database
-│   │   ├── calendar-data.json    # Calendar config + weekly digest cache
+├── .env                          # Secrets (API keys, auth, DuckDNS)
+├── docker-compose.yml            # 4-container stack
+├── services/
+│   └── hub/                      # Monolith service
+│       ├── app.py                # Main FastAPI app (mounts all routers)
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       ├── routers/
+│       │   ├── core.py           # Docker ops, exec, sessions, skills
+│       │   ├── chat.py           # LLM chat with multi-model routing
+│       │   ├── finance.py        # Finance tracker
+│       │   ├── nutrition.py      # Nutrition tracker
+│       │   ├── calendar.py       # Google Calendar
+│       │   ├── monitor.py        # System metrics
+│       │   └── heartbeat.py      # Heartbeat poller
+│       └── static/               # Web UI HTML files
+│           ├── landing/index.html
+│           ├── chat/index.html
+│           ├── finance/index.html
+│           ├── nutrition/index.html
+│           ├── calendar/index.html
+│           ├── monitor/index.html
+│           └── heartbeat/index.html
+├── custom-skills/                # Mounted in openclaw
+├── openclaw-data/                # Agent data + workspace
+│   ├── workspace/
+│   │   ├── openclaw.db           # Shared SQLite (finance + nutrition)
+│   │   ├── calendar-data.json
 │   │   ├── google-credentials.json
-│   │   └── google-token.json
-│   ├── agents/                   # OpenClaw agent configs
-│   ├── skills/                   # OpenClaw internal skills
-│   ├── logs/                     # OpenClaw logs
-│   └── openclaw.json             # Main OpenClaw config
+│   │   ├── google-token.json
+│   │   ├── AGENTS.md, SOUL.md, USER.md, TOOLS.md, MEMORY.md
+│   │   └── memory/              # Daily session logs
+│   └── openclaw.json            # Agent config (providers, models)
 ├── traefik/
-│   ├── traefik.yml               # Traefik entrypoints, TLS config
-│   ├── dynamic.yml               # Route rules, middlewares, services
-│   ├── .htpasswd                 # Basic auth credentials
-│   └── acme/                     # Let's Encrypt certificates
-└── scripts/
-    ├── approve-latest-browser-pairing.sh
-    └── setup-windows-access.ps1
+│   ├── traefik.yml, dynamic.yml, .htpasswd
+│   └── acme/                    # TLS certificates
+└── docs/
+    ├── DEPLOYMENT.md
+    └── MAINTENANCE.md
 ```
 
-## Docker Container Paths (Inside openclaw)
+## Docker Container Paths
 
-| Host Path | Container Path | Purpose |
-|-----------|---------------|---------|
-| `./openclaw-data` | `/home/node/.openclaw` | Agent data, configs, sessions |
-| `./workspace` | `/home/node/workspace` | Shared workspace |
-| `./custom-skills` | `/app/custom-skills` | All custom skills |
-| `./models` | `/models` (llama only) | LLM model weights |
+| Host Path | Hub Container Path | OpenClaw Container Path |
+|-----------|-------------------|------------------------|
+| `./openclaw-data/workspace/` | `/workspace/` | `/home/node/.openclaw/workspace/` |
+| `./custom-skills/` | — | `/app/custom-skills/` |
+| `./openclaw-data/` | — | `/home/node/.openclaw/` |
+| `/var/run/docker.sock` | `/var/run/docker.sock` | — |
+| `/proc` | `/host/proc` (read-only) | — |
 
 ## Traefik Routing
 
 All external traffic → `openclaw-frostbite.duckdns.org` (HTTPS)
 - TLS: Let's Encrypt via DuckDNS DNS challenge
 - Auth: HTTP basic auth on all routes (`.htpasswd`)
-- Path prefix is stripped before forwarding to services
+- **Full path forwarded** (no prefix stripping) — hub handles routing internally
 
-| Path | → Service | Middleware |
-|------|-----------|-----------|
-| `/chat` | `http://chat:9094` | basicAuth + stripPrefix |
-| `/monitor` | `http://monitor:9091` | basicAuth + stripPrefix |
-| `/heartbeat` | `http://heartbeat:9092` | basicAuth + stripPrefix |
-| `/calendar` | `http://calendar:9093` | basicAuth + stripPrefix |
-| `/finance` | `http://finance:9096` | basicAuth + stripPrefix |
-| `/nutrition` | `http://nutrition:9097` | basicAuth + stripPrefix |
-| `/` (catch-all) | `http://landing:9095` | basicAuth |
+| Path | → Target | Middleware |
+|------|----------|-----------|
+| `/chat` | `hub:8000` | basicAuth |
+| `/finance` | `hub:8000` | basicAuth |
+| `/nutrition` | `hub:8000` | basicAuth |
+| `/calendar` | `hub:8000` | basicAuth |
+| `/monitor` | `hub:8000` | basicAuth |
+| `/heartbeat` | `hub:8000` | basicAuth |
+| `/datasette` | `datasette:8001` | basicAuth + stripPrefix |
+| `/` (catch-all) | `hub:8000` | basicAuth |
 
 ## LLM Configuration
 
-- **Model:** Qwen3.5-9B-Q4_K_M.gguf
-- **Context size:** 32768 tokens
-- **GPU layers:** 99 (fully offloaded)
-- **Threads:** 6
-- **Parallel slots:** 1
-- **Reasoning budget:** 1024
-- **Flash attention:** on
-- **Jinja templates:** enabled
-- **API:** OpenAI-compatible (`/v1/chat/completions`, `/v1/models`, `/health`)
+Multi-model routing via external providers (configured in `openclaw.json`):
+
+| Provider | Model | Use Case | Free Tier |
+|----------|-------|----------|-----------|
+| Gemini (Google AI Studio) | gemini-2.5-flash-preview-05-20 | Default — general tasks | 15 RPM / 1500 RPD |
+| OpenRouter | qwen/qwen3-coder | Coding & technical tasks | 20 RPM / 50 RPD |
+
+Chat service auto-routes coding tasks to Qwen3-Coder based on keyword detection.
 
 ## Environment Variables
 
 | Variable | Used By | Purpose |
 |----------|---------|---------|
-| `DUCKDNS_TOKEN` | traefik | TLS cert renewal via DuckDNS |
-| `CORS_ORIGIN` | chat | Allowed CORS origin |
-| `TRAEFIK_BASIC_AUTH` | .env | Basic auth config reference |
-| `OPENAI_API_BASE` | openclaw | LLM endpoint (`http://llama:8080/v1`) |
-| `OPENAI_API_KEY` | openclaw | Set to `not-needed` (local LLM) |
-| `LLM_PROVIDER` | openclaw | `openai` |
-| `LLM_MODEL` | openclaw | `qwen3.5-9b` |
-| `LLM_BASE_URL` | core-api, chat | `http://llama:8080` |
-| `CORE_API_URL` | monitor, heartbeat, chat | `http://core-api:8000` |
-| `USDA_API_KEY` | nutrition | USDA FoodData Central key (default: `DEMO_KEY`) |
+| `DUCKDNS_TOKEN` | traefik | TLS cert renewal |
+| `CORS_ORIGIN` | hub | Allowed CORS origin |
+| `GEMINI_API_KEY` | hub (chat) | Google AI Studio API key |
+| `OPENROUTER_API_KEY` | hub (chat) | OpenRouter API key |
+| `USDA_API_KEY` | hub (nutrition) | USDA FoodData Central key |
+| `GOOGLE_CREDENTIALS` | hub (calendar) | Google Calendar OAuth |
+| `WORKSPACE_DIR` | hub | Path to workspace volume |
 
-## Skill Routing
+## Skills
 
-Skills are loaded at openclaw startup from `/app/custom-skills/`. Each skill's `description` field is used for intent routing — the LLM reads all descriptions to decide which skill to invoke.
-
-**Current skills (8):**
+9 custom skills loaded from `/app/custom-skills/`:
 
 | Skill | Emoji | Triggers On |
 |-------|-------|-------------|
-| `self-admin` | 🔧 | system health, restart, rebuild, troubleshoot, architecture |
+| `self-admin` | 🔧 | system health, restart, rebuild, troubleshoot |
 | `calendar-assistant` | 📅 | calendar, schedule, events, reminders |
 | `epub-downloader` | 📚 | download book, find ebook, epub |
-| `finance-tracker` | 💰 | expenses, income, spending, accounts, net worth |
-| `media-downloader` | 📥 | download media (routes to epub-downloader) |
+| `finance-tracker` | 💰 | expenses, income, spending, accounts |
+| `media-downloader` | 📥 | download media |
 | `nutrition-tracker` | 🥗 | calories, macros, food log, nutrition |
-| `ph-credit-card-maximizer` | 💳 | credit cards, rewards, cashback, promos |
-| `ph-investment-advisor` | 📈 | investments, savings, digital banks, MP2, REITs |
-| `travel-advisor` | ✈️ | travel, flights, itineraries, visas |
+| `ph-credit-card-maximizer` | 💳 | credit cards, rewards, cashback |
+| `ph-investment-advisor` | 📈 | investments, savings, digital banks |
+| `travel-advisor` | ✈️ | travel, flights, itineraries |
 
 ## Database Schemas
 
-### Finance (`/workspace/finance.db`)
+All in `/workspace/openclaw.db`:
 
+### Finance Tables
 ```sql
 transactions (id, date, time, account, category, subcategory, type, amount, php,
               currency, expense_type, payment_status, personal_amount,
               non_personal_amount, description, note, created_at, updated_at)
--- type: Exp. | Income | Transfer-In | Transfer-Out
--- payment_status: Paid | Unpaid (for credit card tracking)
-
 budgets (id, month, category, amount, UNIQUE(month, category))
-
 accounts (id, name, group_name, icon, sort_order, created_at)
 ```
 
-### Nutrition (`/workspace/nutrition.db`)
-
+### Nutrition Tables
 ```sql
 food_log (id, date, time, meal_type, food_name, serving_size, calories,
           protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
           notes, created_at, updated_at)
--- meal_type: breakfast | lunch | dinner | snack
-
 daily_goals (calories=2000, protein_g=150, carbs_g=200, fat_g=65, fiber_g=25)
-
 food_database (id, external_id, source, food_name, brand, serving_size,
                serving_g, calories, protein_g, carbs_g, fat_g, fiber_g,
                sugar_g, sodium_mg, tags, created_at, updated_at)
--- source: seeded (~130 PH dishes) | openfoodfacts | usda | custom
 ```

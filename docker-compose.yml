@@ -2,9 +2,11 @@ services:
   llama:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llama-server
+    profiles:
+      - local-llm
     restart: unless-stopped
     expose:
-      - "8080"                                         # internal only; other containers access via Docker DNS
+      - "8080"
     volumes:
       - ./models:/models:ro
     command: >
@@ -54,7 +56,7 @@ services:
     volumes:
       - ./openclaw-data:/home/node/.openclaw
       - ./workspace:/home/node/workspace
-      - ./custom-skills:/app/custom-skills            # ← all custom skills
+      - ./custom-skills:/app/custom-skills
       - "/mnt/c/Users/resup/OneDrive - University of the Philippines/Ebooks:/ebooks"
     environment:
       - OPENAI_API_BASE=https://generativelanguage.googleapis.com/v1beta/openai
@@ -103,12 +105,10 @@ services:
           memory: 128M
           cpus: '0.25'
 
-  # ═══════════════════ Microservice Command Center ═══════════════════════════
-
-  # ── Core API (internal — not exposed to Traefik) ───────────────────────────
-  core-api:
-    build: ./services/core-api
-    container_name: core-api
+  # ── Hub: Monolithic Command Center ─────────────────────────────────────
+  hub:
+    build: ./services/hub
+    container_name: hub
     restart: unless-stopped
     expose:
       - "8000"
@@ -116,130 +116,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project
       - ./openclaw-data:/openclaw-data:ro
-      - ./openclaw-data/workspace:/openclaw-data/workspace
+      - ./openclaw-data/workspace:/workspace
       - ./openclaw-data/agents/main/sessions:/openclaw-data/agents/main/sessions
       - ./custom-skills:/custom-skills
-    environment:
-      - LLM_BASE_URL=${LLM_API_BASE:-http://llama:8080}
-      - LLM_MODEL=${LLM_MODEL:-gemini-3-flash-preview}
-      - PROJECT_ROOT=/project
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    depends_on:
-      - openclaw
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # ── Monitor Service ─────────────────────────────────────────────────────────
-  monitor:
-    build: ./services/monitor
-    container_name: monitor
-    restart: unless-stopped
-    expose:
-      - "9091"
-    volumes:
       - /proc/meminfo:/host/proc/meminfo:ro
       - /proc/stat:/host/proc/stat:ro
       - /proc/loadavg:/host/proc/loadavg:ro
       - /proc/cpuinfo:/host/proc/cpuinfo:ro
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - CORE_API_URL=http://core-api:8000
-    runtime: nvidia
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    depends_on:
-      - core-api
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:9091/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # ── Heartbeat Service ───────────────────────────────────────────────────────
-  heartbeat:
-    build: ./services/heartbeat
-    container_name: heartbeat
-    restart: unless-stopped
-    expose:
-      - "9092"
-    volumes:
-      - ./openclaw-data/workspace:/workspace:ro
-    environment:
-      - CORE_API_URL=http://core-api:8000
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    depends_on:
-      - core-api
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:9092/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-
-  # ── Calendar Service ────────────────────────────────────────────────────────
-  calendar:
-    build: ./services/calendar
-    container_name: calendar
-    restart: unless-stopped
-    expose:
-      - "9093"
-    volumes:
-      - ./openclaw-data/workspace:/workspace
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9093/api/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-
-  # ── Chat Service ────────────────────────────────────────────────────────────
-  chat:
-    build: ./services/chat
-    container_name: chat
-    restart: unless-stopped
-    expose:
-      - "9094"
     environment:
       - LLM_BASE_URL=${LLM_API_BASE:-http://llama:8080/v1}
       - LLM_API_KEY=${LLM_API_KEY:-}
@@ -247,108 +130,32 @@ services:
       - LLM_CODING_URL=${LLM_CODING_URL:-}
       - LLM_CODING_KEY=${LLM_CODING_KEY:-}
       - LLM_CODING_MODEL=${LLM_CODING_MODEL:-}
-      - CORE_API_URL=http://core-api:8000
       - CORS_ORIGIN=${CORS_ORIGIN:-https://openclaw-frostbite.duckdns.org}
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    depends_on:
-      - core-api
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9094/api/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # ── Finance Tracker ────────────────────────────────────────────────────────
-  finance:
-    build: ./services/finance
-    container_name: finance
-    restart: unless-stopped
-    expose:
-      - "9096"
-    volumes:
-      - ./openclaw-data/workspace:/workspace
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9096/api/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-
-  # ── Nutrition Tracker ──────────────────────────────────────────────────────
-  nutrition:
-    build: ./services/nutrition
-    container_name: nutrition
-    restart: unless-stopped
-    expose:
-      - "9097"
-    volumes:
-      - ./openclaw-data/workspace:/workspace
-    environment:
-      # Optional: get a free key at https://fdc.nal.usda.gov/api-key-signup
-      # Avoids DEMO_KEY rate limits (30 req/hr). Leave blank to use DEMO_KEY.
       - USDA_API_KEY=${USDA_API_KEY:-DEMO_KEY}
+      - WORKSPACE_DIR=/workspace
+      - PROJECT_ROOT=/project
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
     logging:
       driver: json-file
       options:
-        max-size: "5m"
-        max-file: "2"
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - openclaw
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9097/api/health')"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.5'
+          memory: 1G
+          cpus: '2.0'
 
-  # ── Landing Service ─────────────────────────────────────────────────────────
-  landing:
-    build: ./services/landing
-    container_name: landing
-    restart: unless-stopped
-    expose:
-      - "9095"
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9095/api/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
-
-  # ── Datasette (Central DB Web UI) ──────────────────────────────────────────
+  # ── Datasette (Central DB Web UI) ──────────────────────────────────────
   datasette:
     build: ./services/datasette
     container_name: datasette
@@ -373,4 +180,3 @@ services:
         limits:
           memory: 128M
           cpus: '0.25'
-

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d1117">
+<title>Heartbeat — Frostbite</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💓</text></svg>">
+<style>
+  :root { --bg:#0d1117;--card:#161b22;--border:#30363d;--green:#3fb950;--yellow:#d29922;--red:#f85149;--blue:#58a6ff;--frost:#a8d8ea;--muted:#7d8590;--text:#e6edf3;--text2:#c9d1d9;--radius:10px;--shadow:0 2px 8px rgba(0,0,0,.4); }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-size: 14px; min-height: 100vh; }
+
+  .topnav { display: flex; align-items: center; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; }
+  .topnav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .topnav a:hover { color: var(--text); background: rgba(255,255,255,.06); }
+  .topnav a.active { color: var(--frost); background: rgba(168,216,234,.1); }
+  .topnav .brand { font-weight: 600; color: var(--text); font-size: 15px; margin-right: 12px; }
+
+  .main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .grid-full { grid-column: 1 / -1; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; line-height: 1.6; }
+  .pill-green { background: rgba(63,185,80,.18); color: var(--green); }
+  .pill-yellow { background: rgba(210,153,34,.18); color: var(--yellow); }
+  .pill-red { background: rgba(248,81,73,.18); color: var(--red); }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(48,54,61,.4); font-size: 13px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); font-size: 12px; }
+  .stat-value { font-size: 13px; font-weight: 500; color: var(--text2); }
+
+  .hb-task-card { display: flex; align-items: flex-start; gap: 12px; background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+  .hb-task-card:last-child { margin-bottom: 0; }
+  .hb-task-name { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 4px; }
+  .hb-task-bullets { list-style: disc; padding-left: 16px; margin: 0; }
+  .hb-task-bullets li { color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+  #hb-trigger-all { background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green); padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+  #hb-trigger-all:hover { background: rgba(63,185,80,.22); }
+  #hb-trigger-all:disabled { opacity: .4; cursor: not-allowed; }
+
+  #toast { display: none; position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 9999; background: var(--card); border: 1px solid var(--border); color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  #toast.toast-success { border-color: var(--green); color: var(--green); }
+  #toast.toast-error { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="/" class="brand">❄️ Frostbite</a>
+  <a href="/chat/">💬 Chat</a>
+  <a href="/monitor/">📡 Monitor</a>
+  <a href="/heartbeat/" class="active">💓 Heartbeat</a>
+  <a href="/calendar/">📅 Calendar</a>
+  <a href="/finance/">💰 Finance</a>
+  <a href="/nutrition/">🥗 Nutrition</a>
+</nav>
+
+<div id="toast" role="alert"></div>
+
+<div class="main">
+<header><h1>💓 Heartbeat</h1></header>
+
+<div class="grid">
+  <div class="card"><div class="card-title">Heartbeat Status</div><div id="hb-status-body"><div class="stat-label">Loading…</div></div></div>
+  <div class="card"><div class="card-title">Last Event</div><div id="hb-event-body"><div class="stat-label" style="color:var(--muted)">No heartbeat events yet</div></div></div>
+  <div class="card grid-full">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Scheduled Tasks</span><button id="hb-trigger-all" onclick="triggerHeartbeat(this)">▶ Trigger Heartbeat Now</button></div>
+    <div id="hb-tasks-body"><div class="stat-label">Loading…</div></div>
+  </div>
+</div>
+</div>
+
+<script>
+function pill(label, color) { return `<span class="pill pill-${color}">${label}</span>`; }
+function statRow(label, value) { return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`; }
+function showToast(msg, type) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.className = type ? `toast-${type}` : '';
+  t.style.display = 'block'; clearTimeout(t._tid); t._tid = setTimeout(() => t.style.display = 'none', 5000);
+}
+
+function _localTz() { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+function _fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const d = new Date(typeof ts === 'number' ? ts * 1000 : ts);
+    const tz = new Intl.DateTimeFormat('en', { timeZoneName: 'short', timeZone: _localTz() }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || '';
+    return d.toLocaleString('en-US', { timeZone: _localTz(), year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + ' ' + tz;
+  } catch { return String(ts); }
+}
+
+function renderHeartbeatStatus(data) {
+  const running = data.running;
+  const lastChecks = (data.state || {}).lastChecks || {};
+  let html = '';
+  html += statRow('Status', running ? pill('running', 'yellow') : pill('idle', 'green'));
+  if (data.running_tasks?.length) {
+    html += `<div style="margin-top:8px;font-size:11px;color:var(--muted)">Active tasks:</div>`;
+    for (const t of data.running_tasks) {
+      html += `<div class="stat-row"><span class="stat-label">${t.kind||t.type||'task'}</span><span class="stat-value">${pill(t.status||'running','yellow')}</span></div>`;
+    }
+  }
+  if (Object.keys(lastChecks).length) {
+    html += `<div style="margin-top:12px;margin-bottom:6px" class="card-title">Last Check Times</div>`;
+    for (const [key, val] of Object.entries(lastChecks)) {
+      html += statRow(key, `<span style="color:var(--${val ? 'text2' : 'muted'})">${val ? _fmtTs(val) : 'never'}</span>`);
+    }
+  }
+  document.getElementById('hb-status-body').innerHTML = html;
+}
+function renderHeartbeatEvent(data) {
+  const evt = data.last_event;
+  if (!evt) { document.getElementById('hb-event-body').innerHTML = '<div class="stat-label" style="color:var(--muted)">No heartbeat events recorded yet</div>'; return; }
+  let html = '';
+  if (evt.raw) { html += `<pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-all">${evt.raw}</pre>`; }
+  else { for (const [k, v] of Object.entries(evt)) { html += statRow(k, `<span style="font-size:12px;color:var(--text2)">${JSON.stringify(v)}</span>`); } }
+  document.getElementById('hb-event-body').innerHTML = html;
+}
+function renderHeartbeatTasks(data) {
+  const tasks = data.tasks || [];
+  const notes = (data.state || {}).notes || '';
+  if (!tasks.length) { document.getElementById('hb-tasks-body').innerHTML = '<div class="stat-label" style="color:var(--muted)">No tasks defined in HEARTBEAT.md</div>'; return; }
+  let html = '';
+  for (const t of tasks) {
+    html += `<div class="hb-task-card"><div><div class="hb-task-name">${t.name}</div><ul class="hb-task-bullets">${t.bullets.map(b => `<li>${b}</li>`).join('')}</ul></div></div>`;
+  }
+  if (notes) html += `<div style="margin-top:10px;font-size:11px;color:var(--muted);font-style:italic">📝 ${notes}</div>`;
+  document.getElementById('hb-tasks-body').innerHTML = html;
+}
+
+async function fetchHeartbeat() {
+  try {
+    const res = await fetch('/heartbeat/api/heartbeat');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderHeartbeatStatus(data); renderHeartbeatEvent(data); renderHeartbeatTasks(data);
+  } catch (err) {
+    document.getElementById('hb-status-body').innerHTML = `<div class="stat-label" style="color:var(--red)">Error: ${err.message}</div>`;
+  }
+}
+
+async function triggerHeartbeat(btn) {
+  btn.disabled = true; btn.textContent = '⏳ Triggering…';
+  try {
+    const res = await fetch('/heartbeat/api/heartbeat/trigger', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    showToast('✅ Heartbeat triggered successfully!');
+    setTimeout(fetchHeartbeat, 2000);
+  } catch (err) { showToast(`❌ Trigger failed: ${err.message}`); }
+  finally { btn.disabled = false; btn.textContent = '▶ Trigger Heartbeat Now'; }
+}
+
+fetchHeartbeat();
+</script>
+</body>
+</html>

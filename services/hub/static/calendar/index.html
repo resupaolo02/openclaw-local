@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<title>Calendar — Frostbite</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+<style>
+  :root {
+    --bg:      #0d1117;
+    --card:    #161b22;
+    --border:  #30363d;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --red:     #f85149;
+    --blue:    #58a6ff;
+    --frost:   #a8d8ea;
+    --muted:   #7d8590;
+    --text:    #e6edf3;
+    --text2:   #c9d1d9;
+    --radius:  10px;
+    --shadow:  0 2px 8px rgba(0,0,0,.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px; min-height: 100dvh;
+  }
+
+  /* ── Top nav ── */
+  .topnav {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 20px; height: 48px; position: sticky; top: 0; z-index: 100;
+  }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: var(--frost); text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .topnav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; padding: 4px 0; transition: color .15s; }
+  .topnav a:hover { color: var(--text); }
+  .topnav a.active { color: var(--blue); border-bottom: 2px solid var(--blue); }
+
+  /* ── Layout ── */
+  .content { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
+
+  /* ── Grid / Card ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .grid-full { grid-column: 1 / -1; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 14px; }
+
+  /* ── Calendar-specific ── */
+  .cal-week-header { display: flex; align-items: center; gap: 10px; margin: 14px 0 6px; }
+  .cal-week-header:first-child { margin-top: 0; }
+  .cal-day-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--frost); min-width: 96px; }
+  .cal-day-date { font-size: 11px; color: var(--muted); }
+  .cal-day-free { font-size: 11px; color: var(--muted); font-style: italic; padding: 6px 0 6px 16px; margin-bottom: 4px; }
+  .cal-ev-card {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: rgba(255,255,255,.03); border: 1px solid var(--border);
+    border-left: 3px solid var(--blue); border-radius: 6px;
+    padding: 8px 12px; margin-bottom: 6px; margin-left: 16px;
+  }
+  .cal-ev-card.today-ev { border-left-color: var(--green); }
+  .cal-ev-time { flex-shrink: 0; font-size: 11px; font-weight: 600; color: var(--blue); min-width: 80px; padding-top: 2px; }
+  .cal-ev-card.today-ev .cal-ev-time { color: var(--green); }
+  .cal-ev-info { flex: 1; min-width: 0; }
+  .cal-ev-title { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-ev-sub { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .cal-ev-del {
+    flex-shrink: 0; background: none; border: 1px solid transparent;
+    color: var(--muted); border-radius: 4px; padding: 2px 6px;
+    font-size: 11px; cursor: pointer; transition: color .15s, border-color .15s; align-self: flex-start;
+  }
+  .cal-ev-del:hover { color: var(--red); border-color: var(--red); }
+  .cal-week-range {
+    font-size: 11px; font-weight: 600; color: var(--blue);
+    margin-bottom: 12px; padding: 6px 10px; background: rgba(88,166,255,.08);
+    border-radius: 6px; display: inline-block;
+  }
+  .cal-filter-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .cal-filter-pill {
+    background: var(--card); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: background .12s, border-color .12s, color .12s; white-space: nowrap;
+  }
+  .cal-filter-pill:hover { background: rgba(88,166,255,.1); border-color: rgba(88,166,255,.4); color: var(--blue); }
+  .cal-filter-pill.active { background: rgba(88,166,255,.18); border-color: var(--blue); color: var(--blue); }
+  #cal-trigger-btn {
+    background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green);
+    border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  #cal-trigger-btn:hover { background: rgba(63,185,80,.22); }
+  #cal-trigger-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .cal-add-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cal-add-form input, .cal-add-form select, .cal-add-form textarea {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 6px 10px; font-size: 12px; width: 100%; font-family: inherit;
+  }
+  .cal-add-form textarea { resize: vertical; min-height: 56px; }
+  .cal-add-form .full-col { grid-column: 1 / -1; }
+  .cal-add-form input:focus, .cal-add-form select:focus, .cal-add-form textarea:focus { outline: none; border-color: var(--blue); }
+  #cal-add-submit {
+    background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.35); color: var(--blue);
+    border-radius: 6px; padding: 7px 18px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .15s; width: 100%;
+  }
+  #cal-add-submit:hover { background: rgba(88,166,255,.28); }
+  #cal-add-submit:disabled { opacity: .4; cursor: not-allowed; }
+  .cal-empty { text-align: center; color: var(--muted); padding: 28px 0; font-size: 13px; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5); z-index: 9999; display: none;
+  }
+
+  @media (max-width: 600px) {
+    .cal-add-form input, .cal-add-form select, .cal-add-form textarea { font-size: 16px; }
+    .topnav { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .topnav::-webkit-scrollbar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Top Navigation ── -->
+<nav class="topnav">
+  <a class="brand" href="/" title="Back to Dashboard">← ❄️</a>
+</nav>
+
+<div class="content">
+  <div class="grid">
+
+    <!-- Weekly Digest Card -->
+    <div class="card grid-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Week Schedule</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="cal-mode-next" onchange="fetchCalendarWeek()" style="accent-color:var(--blue)"> Next week
+          </label>
+          <button id="cal-trigger-btn" onclick="triggerWeeklyDigest(this)">▶ Refresh Digest</button>
+        </div>
+      </div>
+      <div id="cal-digest-body">
+        <div class="stat-label" style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Upcoming Events Card -->
+    <div class="card grid-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span>Upcoming Events</span>
+        <span id="cal-events-count" style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div class="cal-filter-wrap" id="cal-filter-wrap">
+        <button class="cal-filter-pill active" onclick="filterCalEvents(7,   this)">Next 7 days</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(14,  this)">Next 2 weeks</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(30,  this)">Next month</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(90,  this)">Next 3 months</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(180, this)">Next 6 months</button>
+        <button class="cal-filter-pill"        onclick="filterCalEvents(365, this)">Next 12 months</button>
+      </div>
+      <div id="cal-events-body">
+        <div class="stat-label" style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Add Event Card -->
+    <div class="card grid-full">
+      <div class="card-title">Add Event</div>
+      <div class="cal-add-form">
+        <input  class="full-col" id="cal-f-title"    placeholder="Event title *" type="text">
+        <input  id="cal-f-date"     placeholder="Date (YYYY-MM-DD) *" type="date">
+        <input  id="cal-f-time"     placeholder="Start time"          type="time" value="09:00">
+        <input  id="cal-f-end-time" placeholder="End time"            type="time" value="10:00">
+        <input  id="cal-f-location" placeholder="Location"            type="text">
+        <select id="cal-f-recurrence">
+          <option value="none">No recurrence</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+        <input  id="cal-f-reminder" placeholder="Reminder (minutes before)" type="number" value="30">
+        <select id="cal-f-remind-unit" style="display:none"></select>
+        <textarea class="full-col" id="cal-f-desc" placeholder="Notes / description (optional)"></textarea>
+        <button class="full-col" id="cal-add-submit" onclick="addCalendarEvent(this)">➕ Add to Calendar</button>
+      </div>
+      <div id="cal-add-msg" style="margin-top:8px;font-size:12px"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const API = '/calendar';
+
+  let _allCalEvents  = [];
+  let _calFilterDays = 7;
+  const _CAL_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const _CAL_MON  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function _calFmtDate(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    return `${_CAL_DAYS[dow]}, ${String(d).padStart(2,'0')} ${_CAL_MON[m-1]} ${y}`;
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._tid);
+    t._tid = setTimeout(() => { t.style.display = 'none'; }, 5000);
+  }
+
+  // ── Fetch & Render ────────────────────────────────────────────────────────
+
+  async function fetchCalendarWeek() {
+    const mode = document.getElementById('cal-mode-next')?.checked ? 'next' : 'remaining';
+    document.getElementById('cal-digest-body').innerHTML =
+      '<div class="stat-label" style="color:var(--muted)">Loading…</div>';
+    try {
+      const res  = await fetch(`${API}/api/calendar/week?mode=${mode}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      renderCalendarDigest(data);
+    } catch (err) {
+      document.getElementById('cal-digest-body').innerHTML =
+        `<div class="stat-label" style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+    fetchCalendarEvents();
+  }
+
+  function renderCalendarDigest(data) {
+    if (!data.week_start) {
+      document.getElementById('cal-digest-body').innerHTML =
+        '<div class="cal-empty">No digest yet — click Refresh Digest to generate.</div>';
+      return;
+    }
+    const events = data.events || [];
+    const today  = new Date().toISOString().slice(0, 10);
+    const dateRange = [];
+    let cur = new Date(data.week_start + 'T00:00:00');
+    const endD = new Date(data.week_end + 'T00:00:00');
+    while (cur <= endD) {
+      dateRange.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+    const byDate = {};
+    for (const ev of events) {
+      (byDate[ev.date] = byDate[ev.date] || []).push(ev);
+    }
+    const mode = document.getElementById('cal-mode-next')?.checked
+      ? 'WEEK AHEAD' : (new Date().getDay() === 1 ? 'THIS WEEK' : 'REMAINING WEEK');
+    const rangeLabel = `${_calFmtDate(data.week_start).slice(0, -5)} → ${_calFmtDate(data.week_end)}`;
+    let html = `<div class="cal-week-range">${mode}: ${rangeLabel}</div>`;
+
+    for (const dateStr of dateRange) {
+      const dayLabel = _calFmtDate(dateStr);
+      const isToday  = dateStr === today;
+      html += `
+        <div class="cal-week-header">
+          <span class="cal-day-name" style="${isToday ? 'color:var(--green)' : ''}">${dayLabel.split(',')[0]}${isToday ? ' · Today' : ''}</span>
+          <span class="cal-day-date">${dayLabel.slice(dayLabel.indexOf(',')+2)}</span>
+        </div>`;
+      const dayEvs = (byDate[dateStr] || []).sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      if (dayEvs.length) {
+        for (const ev of dayEvs) {
+          const timeStr = ev.all_day ? 'All day' : (ev.time ? (ev.end_time ? `${ev.time}–${ev.end_time}` : ev.time) : 'All day');
+          const loc  = ev.location    ? `<span>📍 ${escapeHtml(ev.location)}</span>` : '';
+          const desc = ev.description ? `<span>📝 ${ev.description}</span>` : '';
+          const link = ev.html_link   ? `<a href="${ev.html_link}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">Open in Google ↗</a>` : '';
+          html += `
+            <div class="cal-ev-card${isToday ? ' today-ev' : ''}">
+              <div class="cal-ev-time">${timeStr}</div>
+              <div class="cal-ev-info">
+                <div class="cal-ev-title">${escapeHtml(ev.title)}</div>
+                <div class="cal-ev-sub">${loc}${desc}${link}</div>
+              </div>
+              <button class="cal-ev-del" onclick="deleteCalendarEvent('${escapeHtml(ev.id)}',this)" title="Delete">✕</button>
+            </div>`;
+        }
+      } else {
+        html += `<div class="cal-day-free">✨ Free</div>`;
+      }
+    }
+    document.getElementById('cal-digest-body').innerHTML = html;
+  }
+
+  async function fetchCalendarEvents() {
+    try {
+      const res  = await fetch(`${API}/api/calendar/events?days=365`);
+      const data = await res.json();
+      if (!res.ok) return;
+      _allCalEvents = data.events || [];
+      filterCalEvents(_calFilterDays);
+    } catch (e) { /* silent */ }
+  }
+
+  function filterCalEvents(days, pillBtn) {
+    _calFilterDays = days;
+    if (pillBtn) {
+      document.querySelectorAll('.cal-filter-pill').forEach(b => b.classList.remove('active'));
+      pillBtn.classList.add('active');
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() + days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const filtered = _allCalEvents.filter(ev => ev.date >= today && ev.date <= cutoffStr);
+    renderCalendarEvents(filtered);
+  }
+
+  function renderCalendarEvents(events) {
+    const body  = document.getElementById('cal-events-body');
+    const count = document.getElementById('cal-events-count');
+    if (!events.length) {
+      body.innerHTML = '<div class="cal-empty">No events in this range.</div>';
+      if (count) count.textContent = '0 events';
+      return;
+    }
+    if (count) count.textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const byDate = {};
+    for (const ev of events) {
+      (byDate[ev.date] = byDate[ev.date] || []).push(ev);
+    }
+    const sortedDates = Object.keys(byDate).sort();
+    let html = '';
+    for (const dateStr of sortedDates) {
+      const isToday = dateStr === today;
+      const dayLabel = _calFmtDate(dateStr);
+      html += `
+        <div class="cal-week-header" style="margin-top:${html ? '12px' : '0'}">
+          <span class="cal-day-name" style="${isToday ? 'color:var(--green)' : ''}">${dayLabel.split(',')[0]}${isToday ? ' · Today' : ''}</span>
+          <span class="cal-day-date">${dayLabel.slice(dayLabel.indexOf(',')+2)}</span>
+        </div>`;
+      const dayEvs = byDate[dateStr].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      for (const ev of dayEvs) {
+        const timeStr = ev.all_day ? 'All day' : (ev.time ? (ev.end_time ? `${ev.time}–${ev.end_time}` : ev.time) : 'All day');
+        const loc  = ev.location    ? `<span>📍 ${escapeHtml(ev.location)}</span>` : '';
+        const desc = ev.description ? `<span>📝 ${ev.description}</span>` : '';
+        const link = ev.html_link   ? `<a href="${ev.html_link}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">Open in Google ↗</a>` : '';
+        html += `
+          <div class="cal-ev-card${isToday ? ' today-ev' : ''}">
+            <div class="cal-ev-time">${timeStr}</div>
+            <div class="cal-ev-info">
+              <div class="cal-ev-title">${escapeHtml(ev.title)}</div>
+              <div class="cal-ev-sub">${loc}${desc}${link}</div>
+            </div>
+            <button class="cal-ev-del" onclick="deleteCalendarEvent('${escapeHtml(ev.id)}',this)" title="Delete">✕</button>
+          </div>`;
+      }
+    }
+    body.innerHTML = html;
+  }
+
+  async function triggerWeeklyDigest(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    try {
+      const res  = await fetch(`${API}/api/calendar/week/trigger`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      document.getElementById('cal-mode-next').checked = false;
+      renderCalendarDigest(data);
+      showToast('✅ Weekly digest refreshed!');
+    } catch (err) {
+      showToast(`❌ Failed: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Refresh Digest';
+    }
+  }
+
+  async function addCalendarEvent(btn) {
+    const title = document.getElementById('cal-f-title').value.trim();
+    const date  = document.getElementById('cal-f-date').value.trim();
+    if (!title || !date) {
+      document.getElementById('cal-add-msg').innerHTML =
+        '<span style="color:var(--red)">Title and date are required.</span>';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving…';
+    document.getElementById('cal-add-msg').innerHTML = '';
+    const payload = {
+      title, date,
+      time:             document.getElementById('cal-f-time').value     || '00:00',
+      end_time:         document.getElementById('cal-f-end-time').value  || '',
+      location:         document.getElementById('cal-f-location').value  || '',
+      recurrence:       document.getElementById('cal-f-recurrence').value|| 'none',
+      reminder_minutes: parseInt(document.getElementById('cal-f-reminder').value) || 30,
+      description:      document.getElementById('cal-f-desc').value      || '',
+    };
+    try {
+      const res = await fetch(`${API}/api/calendar/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      document.getElementById('cal-add-msg').innerHTML =
+        `<span style="color:var(--green)">✅ Added: ${escapeHtml(data.title)} on ${data.date}</span>`;
+      ['cal-f-title','cal-f-date','cal-f-location','cal-f-desc'].forEach(id =>
+        document.getElementById(id).value = '');
+      document.getElementById('cal-f-time').value = '09:00';
+      document.getElementById('cal-f-end-time').value = '10:00';
+      document.getElementById('cal-f-reminder').value = '30';
+      document.getElementById('cal-f-recurrence').value = 'none';
+      fetchCalendarEvents();
+    } catch (err) {
+      document.getElementById('cal-add-msg').innerHTML =
+        `<span style="color:var(--red)">❌ ${err.message}</span>`;
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = '➕ Add to Calendar';
+    }
+  }
+
+  async function deleteCalendarEvent(id, btn) {
+    if (!confirm('Delete this event?')) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${API}/api/calendar/events/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `HTTP ${res.status}`); }
+      showToast('🗑️ Event deleted');
+      fetchCalendarEvents();
+    } catch (err) {
+      showToast(`❌ ${err.message}`);
+      btn.disabled = false;
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  fetchCalendarWeek();
+</script>
+</body>
+</html>
